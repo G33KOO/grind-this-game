@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import { BALANCE, ZONES } from './content';
 import {
-  BOSS_POSITIONS, SECRET_POSITIONS, SHRINE_POSITION, WORLD_HEIGHT, WORLD_WIDTH, generateDecor, noise, zoneAt, zoneScores,
+  BOSS_POSITIONS, SECRET_POSITIONS, SHRINE_POSITION, WORLD_HEIGHT, WORLD_START, WORLD_WIDTH, clearance, generateDecor, isWalkable, noise, zoneAt, zoneScores,
   type Decor,
 } from './world';
 
@@ -55,7 +55,7 @@ export class PlatformScene extends Phaser.Scene {
 
   constructor(
     callbacks: MapCallbacks,
-    private readonly startPosition: { x: number; y: number },
+    private startPosition: { x: number; y: number },
     private readonly playerColor: number,
     exploredData?: string,
   ) {
@@ -71,24 +71,39 @@ export class PlatformScene extends Phaser.Scene {
   }
 
   private paintGround(): void {
-    const cell = 8;
+    const cell = 4;
     const columns = Math.ceil(WORLD_WIDTH / cell);
     const rows = Math.ceil(WORLD_HEIGHT / cell);
     const ground = this.textures.createCanvas('ground', columns, rows)!;
     const context = ground.getContext();
+    if (this.textures.exists('wall-mask')) this.textures.remove('wall-mask');
+    const wallTexture = this.textures.createCanvas('wall-mask', columns, rows)!;
+    const wallContext = wallTexture.getContext();
     for (let row = 0; row < rows; row++) for (let column = 0; column < columns; column++) {
       const x = column * cell + cell / 2;
       const y = row * cell + cell / 2;
       const [first, second] = zoneScores(x, y);
+      const depth = clearance(x, y);
+      if (depth <= 0) {
+        // Mur : plein, mat, sans grille, avec un halo qui s'éteint vers l'intérieur de la roche
+        const halo = Math.max(0, 1 - -depth / 26);
+        const wallColor = css(this.blend(0x010204, neonOf(first.zone.id), halo * 0.12));
+        wallContext.fillStyle = wallColor;
+        wallContext.fillRect(column, row, 1, 1);
+        continue;
+      }
       const neon = neonOf(first.zone.id);
       let color = this.blend(0x05080d, neon, 0.05 + noise(x / 160, y / 160) * 0.07);
       const gap = Math.abs(second.score - first.score);
       if (gap < 7) color = this.blend(color, this.blend(neon, neonOf(second.zone.id), 0.5), (1 - gap / 7) * 0.85);
       else if (gap < 38) color = this.blend(color, neon, ((38 - gap) / 38) * 0.1);
+      if (depth < 3.5) color = this.blend(color, neon, 1);
+      else if (depth < 14) color = this.blend(color, neon, ((14 - depth) / 14) * 0.35);
       context.fillStyle = css(color);
       context.fillRect(column, row, 1, 1);
     }
     ground.refresh();
+    wallTexture.refresh();
     this.add.image(0, 0, 'ground').setOrigin(0).setDisplaySize(columns * cell, rows * cell).setDepth(0);
     const tile = this.make.graphics({ x: 0, y: 0 }, false);
     tile.lineStyle(1, 0x7fe9ff, 1).lineBetween(0.5, 0, 0.5, 64).lineBetween(0, 0.5, 64, 0.5);
@@ -96,6 +111,7 @@ export class PlatformScene extends Phaser.Scene {
     tile.generateTexture('grid', 64, 64);
     tile.destroy();
     this.add.tileSprite(0, 0, WORLD_WIDTH, WORLD_HEIGHT, 'grid').setOrigin(0).setAlpha(0.09).setDepth(0.5);
+    this.add.image(0, 0, 'wall-mask').setOrigin(0).setDisplaySize(columns * cell, rows * cell).setDepth(0.6);
   }
 
   private blend(from: number, to: number, ratio: number): number {
@@ -318,16 +334,18 @@ export class PlatformScene extends Phaser.Scene {
       this.bosses.push({ id: zone.boss, body, visual });
     }
     const playerGraphic = this.make.graphics({ x: 0, y: 0 });
-    for (const [radius, alpha] of [[30, 0.05], [24, 0.1], [19, 0.18]]) playerGraphic.fillStyle(this.playerColor, alpha).fillCircle(32, 32, radius);
-    playerGraphic.fillStyle(VOID, 0.95).fillCircle(32, 32, 12);
-    playerGraphic.lineStyle(5, this.playerColor, 0.25).strokeCircle(32, 32, 12);
-    playerGraphic.lineStyle(2, this.playerColor, 1).strokeCircle(32, 32, 12);
-    playerGraphic.fillStyle(0xffffff, 1).fillCircle(32, 32, 4);
-    playerGraphic.generateTexture('player-dot', 64, 64);
+    for (const [radius, alpha] of [[22, 0.05], [18, 0.1], [14, 0.18]]) playerGraphic.fillStyle(this.playerColor, alpha).fillCircle(24, 24, radius);
+    playerGraphic.fillStyle(VOID, 0.95).fillCircle(24, 24, 9);
+    playerGraphic.lineStyle(4, this.playerColor, 0.25).strokeCircle(24, 24, 9);
+    playerGraphic.lineStyle(1.6, this.playerColor, 1).strokeCircle(24, 24, 9);
+    playerGraphic.fillStyle(0xffffff, 1).fillCircle(24, 24, 3);
+    playerGraphic.generateTexture('player-dot', 48, 48);
     playerGraphic.destroy();
     this.trail = this.add.graphics().setDepth(4);
-    this.player = this.physics.add.sprite(this.startPosition.x, this.startPosition.y, 'player-dot').setDepth(5);
-    this.player.setCircle(12, 20, 20).setCollideWorldBounds(true).setBounce(0);
+    const spawn = isWalkable(this.startPosition.x, this.startPosition.y, 12) ? this.startPosition : WORLD_START;
+    this.startPosition = { ...spawn };
+    this.player = this.physics.add.sprite(spawn.x, spawn.y, 'player-dot').setDepth(5);
+    this.player.setCircle(9, 15, 15).setCollideWorldBounds(true).setBounce(0);
     this.physics.add.collider(this.player, this.walls);
     for (const boss of this.bosses) {
       this.physics.add.overlap(this.player, boss.body, () => {
@@ -357,7 +375,7 @@ export class PlatformScene extends Phaser.Scene {
     this.callbacks.control(device);
   }
 
-  update(_time: number): void {
+  update(_time: number, delta: number): void {
     const controller = navigator.getGamepads?.().find((gamepad) => gamepad?.connected) ?? null;
     let x = Number(this.keys.D.isDown) - Number(this.keys.A.isDown || this.keys.Q.isDown);
     let y = Number(this.keys.S.isDown) - Number(this.keys.W.isDown || this.keys.Z.isDown);
@@ -375,6 +393,10 @@ export class PlatformScene extends Phaser.Scene {
     }
     const magnitude = Math.hypot(x, y);
     if (magnitude > 1) { x /= magnitude; y /= magnitude; }
+    const dt = delta / 1000;
+    const margin = 9;
+    if (!isWalkable(this.player.x + x * PLAYER_SPEED * dt, this.player.y, margin)) x = 0;
+    if (!isWalkable(this.player.x, this.player.y + y * PLAYER_SPEED * dt, margin)) y = 0;
     this.player.setVelocity(x * PLAYER_SPEED, y * PLAYER_SPEED);
     const playerZone = zoneAt(this.player.x, this.player.y);
     if (!this.callbacks.canEnterZone(playerZone.id)) {

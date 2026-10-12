@@ -52,6 +52,7 @@ Le profil (maîtrise, achievements et déblocages) est distinct de la partie ; l
 
 ## Progression, style et combat
 
+- Monde contenu façon tunnel : cinq petites salles reliées en serpentin par des couloirs (Prairie → Forêt → Marais → Crypte → Terres cendrées). Les murs sont pleins, mats, bordés d'un liseré néon, et bloquent le joueur ; le personnage est petit pour que chaque salle tienne presque à l'écran.
 - Style néon épuré façon TRON : obstacles vifs avec disque de collision visible, décor sans collision atténué.
 - Chaque zone a un boss gardien ; la zone suivante reste verrouillée tant qu'il n'est pas vaincu (le dernier boss clôt la partie). La Prairie ne produit que des rencontres à un seul ennemi, les groupes grandissent ensuite (max 2 puis 3).
 - Combat illustré plein écran (ennemis de face, barres de vie dessous) et icônes pour tous les objets et passifs, avec une couleur par rareté. La barre de danger en bas de l'écran monte en continu.

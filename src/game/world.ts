@@ -3,30 +3,38 @@ import { ZONES } from './content';
 export type ZoneId = typeof ZONES[number]['id'];
 export type ZoneDefinition = typeof ZONES[number];
 
-export const WORLD_WIDTH = 3600;
-export const WORLD_HEIGHT = 2600;
-export const WORLD_START = { x: 900, y: 1300 };
-export const SHRINE_POSITION = { x: 1180, y: 1110 };
+export const WORLD_WIDTH = 2400;
+export const WORLD_HEIGHT = 1750;
+export const WORLD_START = { x: 360, y: 520 };
+export const SHRINE_POSITION = { x: 470, y: 650 };
 export const SECRET_POSITIONS = {
-  'secret-one': { x: 1250, y: 330 },
-  'secret-two': { x: 1380, y: 2300 },
+  'secret-one': { x: 1090, y: 340 },
+  'secret-two': { x: 1880, y: 1420 },
 } as const;
 export const BOSS_POSITIONS: Record<string, { x: number; y: number }> = {
-  'meadow-boss': { x: 1400, y: 1250 },
-  'forest-boss': { x: 2300, y: 600 },
-  'marsh-boss': { x: 2100, y: 2050 },
-  'crypt-boss': { x: 3350, y: 900 },
-  'final-boss': { x: 3330, y: 2330 },
+  'meadow-boss': { x: 620, y: 380 },
+  'forest-boss': { x: 1400, y: 370 },
+  'marsh-boss': { x: 2190, y: 520 },
+  'crypt-boss': { x: 2200, y: 1340 },
+  'final-boss': { x: 960, y: 1250 },
 };
 
-// Chaque région est le point le plus proche (pondéré) d'un centre, avec des frontières déformées par du bruit.
-export const ZONE_SHAPES: Record<ZoneId, { x: number; y: number; weight: number }> = {
-  meadow: { x: 900, y: 1300, weight: 1.1 },
-  forest: { x: 1900, y: 650, weight: 0.95 },
-  crypt: { x: 3000, y: 700, weight: 0.9 },
-  marsh: { x: 1800, y: 1850, weight: 1 },
-  ashen: { x: 3000, y: 1950, weight: 1.2 },
+// Cinq salles reliées en serpentin par des couloirs : meadow → forest → marsh → crypt → ashen.
+export const ZONE_SHAPES: Record<ZoneId, { x: number; y: number; weight: number; rx: number; ry: number }> = {
+  meadow: { x: 400, y: 500, weight: 1, rx: 330, ry: 270 },
+  forest: { x: 1200, y: 500, weight: 1, rx: 330, ry: 270 },
+  marsh: { x: 2000, y: 500, weight: 1, rx: 330, ry: 270 },
+  crypt: { x: 2000, y: 1250, weight: 1, rx: 330, ry: 270 },
+  ashen: { x: 1200, y: 1250, weight: 1, rx: 330, ry: 270 },
 };
+
+const CORRIDOR_WIDTH = 130;
+export const PATHS: { from: { x: number; y: number }; to: { x: number; y: number } }[] = [
+  { from: ZONE_SHAPES.meadow, to: ZONE_SHAPES.forest },
+  { from: ZONE_SHAPES.forest, to: ZONE_SHAPES.marsh },
+  { from: ZONE_SHAPES.marsh, to: ZONE_SHAPES.crypt },
+  { from: ZONE_SHAPES.crypt, to: ZONE_SHAPES.ashen },
+];
 
 const hash = (x: number, y: number): number => {
   let h = Math.imul(x, 374761393) + Math.imul(y, 668265263) | 0;
@@ -46,14 +54,34 @@ export function noise(x: number, y: number): number {
   return top + (bottom - top) * v;
 }
 
+const segmentDistance = (x: number, y: number, a: { x: number; y: number }, b: { x: number; y: number }): number => {
+  const dx = b.x - a.x;
+  const dy = b.y - a.y;
+  const t = Math.max(0, Math.min(1, ((x - a.x) * dx + (y - a.y) * dy) / (dx * dx + dy * dy)));
+  return Math.hypot(x - (a.x + dx * t), y - (a.y + dy * t));
+};
+
+// Distance approximative au bord praticable : positive à l'intérieur des salles et couloirs, négative dans les murs.
+export function clearance(x: number, y: number): number {
+  let best = -Infinity;
+  for (const room of Object.values(ZONE_SHAPES)) {
+    const edge = 1 + (noise(x / 90, y / 90) - 0.5) * 0.22;
+    const norm = Math.pow(Math.pow(Math.abs(x - room.x) / room.rx, 4) + Math.pow(Math.abs(y - room.y) / room.ry, 4), 0.25) / edge;
+    best = Math.max(best, (1 - norm) * Math.min(room.rx, room.ry));
+  }
+  for (const path of PATHS) best = Math.max(best, CORRIDOR_WIDTH / 2 - segmentDistance(x, y, path.from, path.to));
+  return best;
+}
+
+export const isWalkable = (x: number, y: number, margin = 0): boolean => clearance(x, y) > margin;
+
 export function zoneScores(x: number, y: number): { zone: ZoneDefinition; score: number }[] {
-  const warpX = (noise(x / 520, y / 520) - 0.5) * 520;
-  const warpY = (noise(x / 520 + 91, y / 520 - 37) - 0.5) * 520;
   return ZONES.map((zone) => {
     const shape = ZONE_SHAPES[zone.id];
-    return { zone, score: Math.hypot(x + warpX - shape.x, y + warpY - shape.y) / shape.weight };
+    return { zone, score: Math.hypot(x - shape.x, y - shape.y) / shape.weight };
   }).sort((a, b) => a.score - b.score);
 }
+
 
 export const zoneAt = (x: number, y: number): ZoneDefinition => zoneScores(x, y)[0].zone;
 
@@ -78,7 +106,7 @@ const BASE_SIZE: Record<DecorKind, [number, number]> = {
   lava: [45, 90], ember: [3, 6], obsidian: [18, 34],
 };
 
-export const DECOR_CLEARANCE = 150;
+export const DECOR_CLEARANCE = 70;
 
 function seededRandom(seed: number): () => number {
   let state = seed >>> 0;
@@ -97,9 +125,11 @@ export function generateDecor(): Decor[] {
   const placed: Decor[] = [];
   const buckets = new Map<string, Decor[]>();
   const bucketKey = (x: number, y: number) => `${Math.floor(x / 120)},${Math.floor(y / 120)}`;
-  for (let attempt = 0; attempt < 14000; attempt++) {
+  for (let attempt = 0; attempt < 6000; attempt++) {
     const x = 90 + random() * (WORLD_WIDTH - 180);
     const y = 90 + random() * (WORLD_HEIGHT - 180);
+    if (clearance(x, y) < 45) continue;
+    if (PATHS.some((path) => segmentDistance(x, y, path.from, path.to) < 62)) continue;
     const zone = zoneAt(x, y).id;
     const table = DECOR_TABLE[zone];
     if (random() > table.density) continue;
@@ -113,6 +143,7 @@ export function generateDecor(): Decor[] {
     }
     const [minSize, maxSize] = BASE_SIZE[kind];
     const size = minSize + random() * (maxSize - minSize);
+    if (PATHS.some((path) => segmentDistance(x, y, path.from, path.to) < 40 + size * 0.5)) continue;
     const cx = Math.floor(x / 120);
     const cy = Math.floor(y / 120);
     let blocked = false;
