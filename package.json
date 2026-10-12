@@ -1,0 +1,61 @@
+{
+  "name": "grind-this-game",
+  "private": true,
+  "version": "0.1.0",
+  "description": "A compact deterministic top-down RPG prototype",
+  "main": "dist-electron/main.js",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "test": "vitest run",
+    "electron:dev": "concurrently -k \"vite --host 127.0.0.1\" \"wait-on http://127.0.0.1:5173 && electron .\"",
+    "electron:build": "npm run build && tsc -p electron/tsconfig.json && electron-builder --win dir",
+    "typecheck": "tsc -b --pretty"
+  },
+  "dependencies": {
+    "phaser": "^3.90.0",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.30",
+    "@types/react": "^19.1.8",
+    "@types/react-dom": "^19.1.7",
+    "@vitejs/plugin-react": "^4.7.0",
+    "concurrently": "^9.2.0",
+    "electron": "^44.7.0",
+    "electron-builder": "^26.17.0",
+    "typescript": "~5.8.3",
+    "vite": "^6.3.5",
+    "vitest": "^5.0.3",
+    "wait-on": "^8.0.3"
+  },
+  "overrides": {
+    "app-builder-lib": {
+      "@electron/get": "5.1.0"
+    }
+  },
+  "build": {
+    "appId": "com.g33koo.grindthisgame",
+    "productName": "Grind This Game",
+    "directories": {
+      "output": "release/windows"
+    },
+    "electronDist": "node_modules/electron/dist",
+    "files": [
+      "dist/**/*",
+      "dist-electron/**/*",
+      "package.json"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "dir",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    }
+  }
+}
