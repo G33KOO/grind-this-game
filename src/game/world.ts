@@ -11,7 +11,13 @@ export const SECRET_POSITIONS = {
   'secret-one': { x: 1250, y: 330 },
   'secret-two': { x: 1380, y: 2300 },
 } as const;
-export const BOSS_POSITION = { x: 3330, y: 2330 };
+export const BOSS_POSITIONS: Record<string, { x: number; y: number }> = {
+  'meadow-boss': { x: 1400, y: 1250 },
+  'forest-boss': { x: 2300, y: 600 },
+  'marsh-boss': { x: 2100, y: 2050 },
+  'crypt-boss': { x: 3350, y: 900 },
+  'final-boss': { x: 3330, y: 2330 },
+};
 
 // Chaque région est le point le plus proche (pondéré) d'un centre, avec des frontières déformées par du bruit.
 export const ZONE_SHAPES: Record<ZoneId, { x: number; y: number; weight: number }> = {
@@ -87,7 +93,7 @@ function seededRandom(seed: number): () => number {
 
 export function generateDecor(): Decor[] {
   const random = seededRandom(0x51eed5);
-  const reserved = [WORLD_START, SHRINE_POSITION, BOSS_POSITION, ...Object.values(SECRET_POSITIONS), ...Object.values(ZONE_SHAPES)];
+  const reserved = [WORLD_START, SHRINE_POSITION, ...Object.values(BOSS_POSITIONS), ...Object.values(SECRET_POSITIONS), ...Object.values(ZONE_SHAPES)];
   const placed: Decor[] = [];
   const buckets = new Map<string, Decor[]>();
   const bucketKey = (x: number, y: number) => `${Math.floor(x / 120)},${Math.floor(y / 120)}`;

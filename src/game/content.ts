@@ -61,6 +61,10 @@ export const ENEMIES: EnemyDefinition[] = [
   { id: 'wisp', name: 'Feu follet', hp: 92, strength: 20, speed: 1.5, defense: 3, color: 0x71b7ed, xp: 58, loot: [...commonLoot, { itemId: 'lucky-coin', weight: 1 }] },
   { id: 'knight', name: 'Chevalier déchu', hp: 205, strength: 25, speed: 0.85, defense: 14, color: 0xd28f69, xp: 90, loot: [...commonLoot, { itemId: 'thorn-ring', weight: 1 }] },
   { id: 'drake', name: 'Jeune drake', hp: 285, strength: 31, speed: 1.15, defense: 10, color: 0xe36e54, xp: 125, loot: [...commonLoot, { itemId: 'greater-potion', weight: 2 }] },
+  { id: 'meadow-boss', name: 'Reine gélatineuse', hp: 70, strength: 7, speed: 0.7, defense: 2, color: 0x64d7bb, xp: 60, loot: [{ itemId: 'iron-sword', weight: 2 }, { itemId: 'oak-buckler', weight: 2 }, { itemId: 'small-potion', weight: 2 }] },
+  { id: 'forest-boss', name: 'Alpha des bois', hp: 120, strength: 10, speed: 1.1, defense: 3, color: 0x8292a6, xp: 90, loot: [{ itemId: 'duelist-blade', weight: 2 }, { itemId: 'wolf-tooth', weight: 3 }, { itemId: 'trail-coat', weight: 2 }] },
+  { id: 'marsh-boss', name: 'Spectre du marais', hp: 170, strength: 13, speed: 1.2, defense: 4, color: 0x71b7ed, xp: 120, loot: [{ itemId: 'lucky-coin', weight: 2 }, { itemId: 'glass-eye', weight: 2 }, { itemId: 'heart-charm', weight: 2 }] },
+  { id: 'crypt-boss', name: 'Seigneur de la crypte', hp: 230, strength: 17, speed: 0.8, defense: 7, color: 0xd4d1bd, xp: 180, loot: [{ itemId: 'ember-edge', weight: 2 }, { itemId: 'thorn-ring', weight: 2 }, { itemId: 'greater-potion', weight: 2 }] },
   { id: 'final-boss', name: 'Gardien du seuil', hp: 240, strength: 16, speed: 0.65, defense: 8, color: 0xe8b34e, xp: 300, loot: [{ itemId: 'wraith-mail', weight: 2 }, { itemId: 'vampire-seal', weight: 2 }] },
 ];
 
@@ -80,11 +84,11 @@ export const PASSIVES: PassiveDefinition[] = [
 ];
 
 export const ZONES = [
-  { id: 'meadow', name: 'Prairie oubliée', level: 1, enemies: ['slime', 'rat', 'bandit', 'wolf'], color: 0x4f8f4a },
-  { id: 'forest', name: 'Forêt sombre', level: 2, enemies: ['wolf', 'bandit', 'rat', 'slime'], color: 0x25603a },
-  { id: 'marsh', name: 'Marais brumeux', level: 3, enemies: ['slime', 'rat', 'wisp', 'cultist'], color: 0x4a6b55 },
-  { id: 'crypt', name: 'Crypte brisée', level: 4, enemies: ['skeleton', 'cultist', 'golem', 'wisp'], color: 0x5a5d78 },
-  { id: 'ashen', name: 'Terres cendrées', level: 8, enemies: ['knight', 'drake', 'wisp', 'golem'], color: 0x7a4a3a },
+  { id: 'meadow', name: 'Prairie oubliée', level: 1, enemies: ['slime', 'rat'], maxGroup: 1, boss: 'meadow-boss', requires: null, color: 0x4f8f4a },
+  { id: 'forest', name: 'Forêt sombre', level: 2, enemies: ['wolf', 'bandit', 'rat', 'slime'], maxGroup: 2, boss: 'forest-boss', requires: 'meadow-boss', color: 0x25603a },
+  { id: 'marsh', name: 'Marais brumeux', level: 3, enemies: ['slime', 'rat', 'wisp', 'cultist'], maxGroup: 2, boss: 'marsh-boss', requires: 'forest-boss', color: 0x4a6b55 },
+  { id: 'crypt', name: 'Crypte brisée', level: 4, enemies: ['skeleton', 'cultist', 'golem', 'wisp'], maxGroup: 3, boss: 'crypt-boss', requires: 'marsh-boss', color: 0x5a5d78 },
+  { id: 'ashen', name: 'Terres cendrées', level: 8, enemies: ['knight', 'drake', 'wisp', 'golem'], maxGroup: 3, boss: 'final-boss', requires: 'crypt-boss', color: 0x7a4a3a },
 ] as const;
 
 export const validateContent = (): string[] => {
@@ -125,6 +129,9 @@ export const validateContent = (): string[] => {
   }
   for (const zone of ZONES) {
     if (!Number.isFinite(zone.color) || zone.level < 1) errors.push(`${zone.id}: couleur ou niveau de zone invalide.`);
+    if (zone.maxGroup < 1 || zone.maxGroup > 3) errors.push(`${zone.id}: taille de groupe invalide.`);
+    if (!enemyIds.has(zone.boss)) errors.push(`${zone.id}: boss inconnu ${zone.boss}.`);
+    if (zone.requires && !ZONES.some((entry) => entry.boss === zone.requires)) errors.push(`${zone.id}: boss requis inconnu ${zone.requires}.`);
   }
   for (const achievement of ACHIEVEMENTS) {
     if ('unlocks' in achievement) for (const id of achievement.unlocks) {

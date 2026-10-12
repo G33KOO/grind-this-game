@@ -50,8 +50,14 @@ Les définitions éditables sont dans `src/game/content.ts`. Ajouter un monstre 
 
 Le profil (maîtrise, achievements et déblocages) est distinct de la partie ; l’équipement trouvé disparaît avec la partie. Les sauvegardes de partie sont versionnées, les anciennes données version 0 sont migrées et une copie valide peut remplacer une partie corrompue. Les achievements fonctionnent hors ligne ; `src/game/platform.ts` expose un adaptateur local neutre en attente de Steamworks.
 
+## Progression, style et combat
+
+- Style néon épuré façon TRON : obstacles vifs avec disque de collision visible, décor sans collision atténué.
+- Chaque zone a un boss gardien ; la zone suivante reste verrouillée tant qu'il n'est pas vaincu (le dernier boss clôt la partie). La Prairie ne produit que des rencontres à un seul ennemi, les groupes grandissent ensuite (max 2 puis 3).
+- Combat illustré plein écran (ennemis de face, barres de vie dessous) et icônes pour tous les objets et passifs, avec une couleur par rareté. La barre de danger en bas de l'écran monte en continu.
+
 ## Limites connues
 
-Ce premier prototype contient deux personnages, cinq zones aux environnements distincts, dix ennemis ordinaires et un boss, 14 objets (dont consommables), six passifs par classe, deux secrets et un sanctuaire. Le mode développeur de l’écran titre permet d’aller directement dans chaque zone, d’ajouter un niveau/objet et de lancer un combat choisi. Il ne contient pas encore une campagne complète équilibrée ou des portes de zone bloquantes, un remappage des touches, un mixage audio (le volume est enregistré mais aucun son n’est livré), ni une vérification matérielle des manettes. Les chemins persistants sont enregistrés par achievement, mais ne pilotent pas encore des portes spécifiques. Les builds Windows nécessitent une machine disposant des dépendances npm et n’ont pas été signés. Aucun backend ni accès réseau n’est nécessaire à l’exécution ; les ressources visuelles et audio sont dessinées/absentes.
+Ce premier prototype contient deux personnages, cinq zones aux environnements distincts, dix ennemis ordinaires et un boss, 14 objets (dont consommables), six passifs par classe, deux secrets et un sanctuaire. Le mode développeur de l’écran titre permet d’aller directement dans chaque zone, d’ajouter un niveau/objet et de lancer un combat choisi. Il ne contient pas encore une campagne complète équilibrée, un remappage des touches, un mixage audio (le volume est enregistré mais aucun son n’est livré), ni une vérification matérielle des manettes. Les chemins persistants sont enregistrés par achievement, mais ne pilotent pas encore des portes spécifiques. Les builds Windows nécessitent une machine disposant des dépendances npm et n’ont pas été signés. Aucun backend ni accès réseau n’est nécessaire à l’exécution ; les ressources visuelles et audio sont dessinées/absentes.
 
 Les tests automatisés couvrent les règles déterministes ; l’intégration Electron, l’accessibilité réelle à la manette et l’exécution native Windows doivent encore être vérifiées sur la machine cible.

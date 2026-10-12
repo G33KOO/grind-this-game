@@ -1,14 +1,18 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Phaser from 'phaser';
-import { ACHIEVEMENTS, ENEMIES, HEROES, ITEMS, PASSIVES, ZONES } from '../game/content';
+import { ACHIEVEMENTS, BALANCE, ENEMIES, HEROES, ITEMS, PASSIVES, ZONES } from '../game/content';
 import {
   addAchievements, advanceEncounter, allocatePoints, choosePassive, deriveStats,
   equipItem, gainExperience, initialProfile, itemForInstance, newRun, passiveChoices, rollEncounter,
   respecStats, rollLoot, slotForItem, startCombat, stepCombat, useConsumable,
 } from '../game/engine';
 import { loadProfile, loadRun, loadSettings, saveProfile, saveRun, saveSettings, type Settings } from '../game/save';
-import { PlatformScene, type MapCallbacks } from '../game/PlatformScene';
+import { PlatformScene, type MapCallbacks, type MapEvent } from '../game/PlatformScene';
 import { ZONE_SHAPES, zoneAt } from '../game/world';
+import { BattleScene } from './BattleScene';
+import { ItemIcon, RARITIES, type Rarity } from './icons';
+
+const passiveRarity = (weight: number): Rarity => weight >= 4 ? 'common' : weight >= 3 ? 'uncommon' : weight >= 2 ? 'rare' : weight >= 1 ? 'epic' : 'legendary';
 import type { CombatState, HeroId, Profile, RunState } from '../game/types';
 
 type Screen = 'title' | 'world' | 'combat' | 'inventory' | 'stats' | 'settings' | 'summary';
@@ -36,6 +40,7 @@ export function App() {
   const [passiveOffers, setPassiveOffers] = useState<string[]>([]);
   const gameRef = useRef<Phaser.Game | null>(null);
   const sceneRef = useRef<PlatformScene | null>(null);
+  const encounterBarRef = useRef<HTMLElement | null>(null);
   const targetRef = useRef<number | undefined>(undefined);
   const finishLock = useRef(false);
   const devItemCount = useRef(0);
@@ -121,7 +126,7 @@ export function App() {
     if (screen === 'world' && run?.pendingCombat && !combatRef.current) launchCombat(run.pendingCombat);
   }, [screen, run?.pendingCombat, launchCombat]);
 
-  const onMapEvent = useCallback((event: 'encounter' | 'boss' | 'shrine' | 'secret-one' | 'secret-two' | 'locked-zone') => {
+  const onMapEvent = useCallback((event: MapEvent) => {
     const current = runRef.current;
     if (!current || current.result !== 'active') return;
     if (event === 'encounter') {
@@ -129,10 +134,11 @@ export function App() {
       const result = rollEncounter(current, zone.id);
       syncRun(result.run);
       launchCombat(result.enemies);
-    } else if (event === 'boss' && !current.defeatedBosses.includes('final-boss')) {
-      launchCombat(['final-boss']);
+    } else if (event.startsWith('boss:')) {
+      const bossId = event.slice(5);
+      if (!current.defeatedBosses.includes(bossId)) launchCombat([bossId]);
     } else if (event === 'locked-zone') {
-      setNotice('Chemin verrouillé : gagnez des niveaux ou obtenez le déblocage permanent.');
+      setNotice('Zone verrouillée : battez le gardien de la zone précédente pour passer.');
     } else if (event === 'shrine') {
       if (current.usedShrines.includes('meadow-shrine')) {
         setNotice('Le sanctuaire a déjà été utilisé pendant cette partie.');
@@ -176,15 +182,21 @@ export function App() {
       },
       event: onMapEvent,
       ready: (scene) => { if (gameRef.current === game) sceneRef.current = scene; },
+      travel: (pending) => {
+        const bar = encounterBarRef.current;
+        const meter = runRef.current?.encounterMeter ?? 0;
+        if (bar) bar.style.width = `${Math.min(1, meter + pending * BALANCE.encounterMeterChancePerUnit / BALANCE.maxEncounterMeter) * 100}%`;
+      },
       explored: (data) => {
         if (runRef.current) runRef.current = { ...runRef.current, explored: data };
       },
       control: setDevice,
       canEnterZone: (zoneId) => {
         const zone = ZONES.find((entry) => entry.id === zoneId);
-        return !!zone && (developmentMode || runRef.current?.level! >= zone.level ||
-          profileRef.current.paths.includes('ashen-path'));
+        return !!zone && (developmentMode || !zone.requires || !!runRef.current?.defeatedBosses.includes(zone.requires) ||
+          (zone.id === 'ashen' && profileRef.current.paths.includes('ashen-path')));
       },
+      isBossDefeated: (bossId) => !!runRef.current?.defeatedBosses.includes(bossId),
     };
     const worldScene = new PlatformScene(callbacks, run.position, HEROES[run.hero].color, run.explored);
     const game = new Phaser.Game({
@@ -247,9 +259,10 @@ export function App() {
     let profileAfter = profileRef.current;
     if (result.over === 'win') {
       updated = gainExperience(updated, defeated.reduce((sum, enemy) => sum + enemy.xp, 0));
-      if (defeated.some((enemy) => enemy.id === 'final-boss')) {
-        updated = { ...updated, defeatedBosses: [...updated.defeatedBosses, 'final-boss'], result: 'victory' };
+      for (const boss of defeated.filter((enemy) => enemy.id.endsWith('boss') && !updated.defeatedBosses.includes(enemy.id))) {
+        updated = { ...updated, defeatedBosses: [...updated.defeatedBosses, boss.id] };
       }
+      if (defeated.some((enemy) => enemy.id === 'final-boss')) updated = { ...updated, result: 'victory' };
       for (const enemy of defeated) {
         const loot = rollLoot(updated, enemy.id, profileRef.current);
         updated = loot.run;
@@ -422,6 +435,7 @@ export function App() {
     <section className={`stage ${screen === 'summary' ? 'stage-hidden' : ''}`} aria-label="Carte du monde">
       <div id="game-canvas" />
       {screen !== 'world' && <div className="stage-veil" />}
+      <div className="encounter-bar" role="progressbar" aria-label="Danger de rencontre"><span>DANGER</span><div className="encounter-track"><i ref={encounterBarRef} /></div></div>
       {screen === 'world' && notice && <div className="floating-notice">{notice}<button onClick={() => setNotice('')} aria-label="Fermer">×</button></div>}
       {screen === 'world' && <div className="map-legend"><span>{device === 'gamepad' ? 'Manette détectée' : 'WASD · ZQSD · Flèches'}</span><span>Pause : Échap</span></div>}
       {screen === 'world' && developmentMode && <div className={`dev-tools ${developerToolsOpen ? 'is-open' : ''}`}>
@@ -442,36 +456,29 @@ export function App() {
       </div>}
     </section>
 
-    {screen === 'combat' && combat && <section className="panel combat-panel" aria-label="Combat">
-      <div className="panel-heading"><div><p className="eyebrow">COMBAT AUTOMATIQUE</p><h2>Rencontre</h2></div><button onClick={() => setPause((value) => !value)}>{pause ? '▶ Reprendre' : 'Ⅱ Pause'}</button></div>
-      <p className="muted">Cible : ← → ou Tab · vitesse ×{settings.combatSpeed}. Un combat interrompu reprend depuis son état enregistré.</p>
-      <div className="combat-layout">
-        <div className="combat-player"><div className="avatar">{run.hero === 'warrior' ? '◆' : '◇'}</div><strong>{HEROES[run.hero].name}</strong>
-          <div className="meter hp"><i style={{ width: percentage(combat.playerHp, combat.playerMaxHp) }} /></div>
-          <span>{combat.playerHp} / {combat.playerMaxHp} PV</span><span>Bouclier : {combat.shield}</span>
-        </div>
-        <div className="enemy-list">{combat.enemies.map((enemy, index) => <button key={enemy.unitId} className={`enemy ${targetRef.current === index ? 'targeted' : ''} ${enemy.currentHp <= 0 ? 'defeated' : ''}`} onClick={() => { targetRef.current = index; }}>
-          <span className="enemy-symbol" style={{ color: `#${enemy.color.toString(16).padStart(6, '0')}` }}>●</span><strong>{enemy.name}</strong>
-          <div className="meter hp"><i style={{ width: percentage(enemy.currentHp, enemy.hp) }} /></div><small>{enemy.currentHp} / {enemy.hp} PV {enemy.poisonTurns > 0 ? `· ☠ ${enemy.poisonTurns}` : ''}</small>
-        </button>)}</div>
-      </div>
-      <div className="battle-log" aria-live="polite">{combat.log.map((line, index) => <p key={`${index}-${line}`}>{line}</p>)}</div>
-      {error && combat.over !== 'none' && <button className="primary" onClick={() => { setError(''); void resolveCombat(combat); }}>Réessayer l’enregistrement du combat</button>}
-      {pause && <div className="pause-overlay"><strong>Combat en pause</strong><button className="primary" onClick={() => setPause(false)}>Reprendre</button><small>Échap pour reprendre</small></div>}
-    </section>}
+    {screen === 'combat' && combat && <BattleScene combat={combat} hero={run.hero} heroName={HEROES[run.hero].name}
+      heroColor={HEROES[run.hero].color} zoneId={zoneAt(run.position.x, run.position.y).id} target={targetRef.current ?? 0}
+      speed={settings.combatSpeed} paused={pause} saveError={!!error}
+      onTarget={(index) => { targetRef.current = index; syncCombat({ ...combat }); }}
+      onPause={() => setPause((value) => !value)}
+      onRetry={() => { setError(''); void resolveCombat(combat); }} />}
 
     {screen === 'inventory' && <section className="panel modal-panel">
       <PanelHeading label="ÉQUIPEMENT" title="Inventaire" onClose={backToWorld} />
-      <div className="equipment-grid">{(['weapon', 'armor', 'charm', 'charm2'] as const).map((slot) => <div className="equipment-slot" key={slot}>
-        <span>{slot === 'weapon' ? 'ARME' : slot === 'armor' ? 'ARMURE' : `ACCESSOIRE ${slot === 'charm' ? '1' : '2'}`}</span>
-        <strong>{itemForInstance(run, run.equipment[slot])?.name ?? 'Vide'}</strong>
-      </div>)}</div>
+      <div className="equipment-grid">{(['weapon', 'armor', 'charm', 'charm2'] as const).map((slot) => {
+        const equipped = itemForInstance(run, run.equipment[slot]);
+        return <div className={`equipment-slot${equipped ? ` rarity-${equipped.rarity}` : ''}`} key={slot}>
+          <span>{slot === 'weapon' ? 'ARME' : slot === 'armor' ? 'ARMURE' : `ACCESSOIRE ${slot === 'charm' ? '1' : '2'}`}</span>
+          {equipped && <ItemIcon id={equipped.id} rarity={equipped.rarity} size={52} />}
+          <strong className="rarity-text" style={equipped ? { color: RARITIES[equipped.rarity].color } : undefined}>{equipped?.name ?? 'Vide'}</strong>
+        </div>;
+      })}</div>
       <div className="inventory-list">{run.inventory.map((instance) => {
         const item = ITEMS.find((entry) => entry.id === instance.itemId);
         if (!item) return null;
         const equipped = Object.values(run.equipment).includes(instance.instanceId);
         const comparison = item.slot === 'consumable' ? '' : compareEquipment(run, instance.instanceId);
-        return <article className="item-row" key={instance.instanceId}><div><strong>{item.name}</strong><p>{item.description}</p>{comparison && <p className="item-comparison">{comparison}</p>}</div>
+        return <article className={`item-row rarity-${item.rarity}`} key={instance.instanceId}><ItemIcon id={item.id} rarity={item.rarity} /><div><strong style={{ color: RARITIES[item.rarity].color }}>{item.name}</strong> <small className="rarity-tag" style={{ color: RARITIES[item.rarity].color }}>{RARITIES[item.rarity].label}</small><p>{item.description}</p>{comparison && <p className="item-comparison">{comparison}</p>}</div>
           {item.slot === 'consumable' ? <button disabled={run.hp >= (stats?.maxHp ?? run.hp)} onClick={() => persistRun(useConsumable(run, instance.instanceId))}>Utiliser</button> :
             <span className="equip-buttons">{equipped ? <>
               <small>Équipé</small><button onClick={() => {
@@ -491,14 +498,19 @@ export function App() {
       {passiveOffers.length ? <div className="passive-offers">{passiveOffers.map((id) => {
         const passive = PASSIVES.find((entry) => entry.id === id)!;
         const rank = run.passives.find((entry) => entry.id === id)?.rank ?? 0;
-        return <button className="passive-card" key={id} onClick={() => clickPassive(id)}><small>PASSIF · RANG {rank + 1}/{passive.maxRank}</small><strong>{passive.name}</strong><span>{passive.description}</span></button>;
+        const rarity = passiveRarity(passive.weight);
+        return <button className={`passive-card rarity-${rarity}`} key={id} onClick={() => clickPassive(id)}><ItemIcon id={passive.id} rarity={rarity} size={56} /><small style={{ color: RARITIES[rarity].color }}>{RARITIES[rarity].label.toUpperCase()} · RANG {rank + 1}/{passive.maxRank}</small><strong>{passive.name}</strong><span>{passive.description}</span></button>;
       })}</div> : run.pendingPassivePicks > 0 ? <div className="empty-choice"><p>Aucun passif débloqué disponible pour ce palier.</p><button onClick={() => { const updated = { ...run, pendingPassivePicks: run.pendingPassivePicks - 1 }; persistRun(updated); if (updated.pendingPassivePicks === 0) backToWorld(); }}>Passer ce choix</button></div> :
         <><div className="stat-grid">{(Object.entries(stats ?? {}) as [string, number][]).map(([key, value]) => <div key={key}><span>{statLabel(key)}</span><strong>{Number.isInteger(value) ? value : value.toFixed(2)}</strong></div>)}</div>
         {run.unspentPoints > 0 && <div className="points-panel"><strong>{run.unspentPoints} points à répartir</strong>{(['strength', 'speed', 'luck', 'defense', 'maxHp'] as const).map((stat) => <div className="point-row" key={stat}><span>{statLabel(stat)}</span>{Array.from(new Set([1, 5, run.unspentPoints])).map((amount) => <button key={amount} onClick={() => pickStat(stat, amount)}>{amount === run.unspentPoints ? 'Tout' : `+${amount}`}</button>)}</div>)}
           {Object.values(run.invested).some((value) => (value ?? 0) > 0) && <button className="respec-button" onClick={() => persistRun(respecStats(run))}>Réinitialiser les points (gratuit)</button>}
         </div>}
         <p className="small-note">Maîtrise {profile.mastery[run.hero]} · Réattribution des statistiques gratuite dans ce prototype.</p>
-        <div className="passive-list">{run.passives.map((passive) => <span key={passive.id}>{PASSIVES.find((entry) => entry.id === passive.id)?.name} · rang {passive.rank}</span>)}</div></>}
+        <div className="passive-list">{run.passives.map((passive) => {
+          const definition = PASSIVES.find((entry) => entry.id === passive.id);
+          const rarity = passiveRarity(definition?.weight ?? 5);
+          return <span key={passive.id} className={`rarity-${rarity}`} style={{ color: RARITIES[rarity].color, borderLeft: `3px solid ${RARITIES[rarity].color}` }}><ItemIcon id={passive.id} rarity={rarity} size={26} />{definition?.name} · rang {passive.rank}</span>;
+        })}</div></>}
     </section>}
 
     {screen === 'settings' && <section className="panel modal-panel">

@@ -337,7 +337,7 @@ export function rollEncounter(run: RunState, zoneId: string): { run: RunState; e
   const zone = ZONES.find((entry) => entry.id === zoneId);
   if (!zone) return { run, enemies: ['slime'] };
   let random = nextRandom(run.rngState);
-  const count = 1 + Math.floor(random.value * 3);
+  const count = 1 + Math.floor(random.value * zone.maxGroup);
   let state = random.state;
   const enemies = Array.from({ length: count }, () => {
     random = nextRandom(state);

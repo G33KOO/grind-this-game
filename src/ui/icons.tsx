@@ -1,0 +1,51 @@
+import type { ReactNode } from 'react';
+
+export type Rarity = 'common' | 'uncommon' | 'rare' | 'epic' | 'legendary';
+
+export const RARITIES: Record<Rarity, { label: string; color: string; glow: string }> = {
+  common: { label: 'Commun', color: '#b8c0c4', glow: '#b8c0c433' },
+  uncommon: { label: 'Peu commun', color: '#5fd16f', glow: '#5fd16f44' },
+  rare: { label: 'Rare', color: '#4aa8ff', glow: '#4aa8ff55' },
+  epic: { label: 'Épique', color: '#b66bff', glow: '#b66bff66' },
+  legendary: { label: 'Légendaire', color: '#ffa733', glow: '#ffa73377' },
+};
+
+const s = { stroke: '#12161c', strokeWidth: 2, strokeLinejoin: 'round' as const, strokeLinecap: 'round' as const };
+
+const GLYPHS: Record<string, ReactNode> = {
+  'iron-sword': <><path d="M34 8 L40 8 L40 14 L18 36 L12 36 L12 30Z" fill="#d7dde3" {...s} /><path d="M12 30 L18 36 L9 41 L7 39Z" fill="#7b5a3a" {...s} /><path d="M17 28 L26 37" stroke="#8a6a3f" strokeWidth="5" strokeLinecap="round" /><path d="M17 28 L26 37" stroke="#12161c" strokeWidth="1.5" opacity=".6" /></>,
+  'duelist-blade': <><path d="M38 6 L40 8 L20 32 L16 28Z" fill="#e6ebef" {...s} /><path d="M12 26 L22 36 M14 38 Q8 32 12 26" fill="none" stroke="#d9b25b" strokeWidth="4" strokeLinecap="round" /><path d="M14 38 L8 42" stroke="#7b5a3a" strokeWidth="5" strokeLinecap="round" /></>,
+  'ember-edge': <><path d="M36 6 L42 6 L42 12 L20 34 L14 34 L14 28Z" fill="#f0a66b" {...s} /><path d="M14 28 L20 34 L10 40 L8 38Z" fill="#5b3d2a" {...s} /><path d="M26 22 Q22 14 28 8 Q28 16 34 18 Q36 24 30 28 Q32 22 26 22Z" fill="#ff6a2a" {...s} strokeWidth={1.5} /><path d="M29 24 Q27 20 30 17 Q31 21 32 23Z" fill="#ffd36b" /></>,
+  'oak-buckler': <><circle cx="24" cy="24" r="17" fill="#8a5d34" {...s} /><circle cx="24" cy="24" r="13" fill="none" stroke="#5d3b1e" strokeWidth="2" /><path d="M24 8 L24 40 M8 24 L40 24" stroke="#5d3b1e" strokeWidth="2" /><circle cx="24" cy="24" r="6" fill="#c9ccd2" {...s} /><circle cx="24" cy="24" r="2" fill="#12161c" opacity=".5" /></>,
+  'trail-coat': <><path d="M16 8 L24 14 L32 8 L42 16 L38 22 L35 20 L36 42 L12 42 L13 20 L10 22 L6 16Z" fill="#6d7f4a" {...s} /><path d="M24 14 L24 42" stroke="#12161c" strokeWidth="2" /><circle cx="24" cy="24" r="1.8" fill="#d9b25b" /><circle cx="24" cy="32" r="1.8" fill="#d9b25b" /><path d="M12 36 L36 36" stroke="#4a5a32" strokeWidth="3" /></>,
+  'wraith-mail': <><circle cx="24" cy="24" r="20" fill="#b66bff" opacity=".22" /><path d="M14 8 L20 12 L28 12 L34 8 L42 14 L38 22 L35 20 L35 40 L13 40 L13 20 L10 22 L6 14Z" fill="#6f7a91" {...s} />{[16, 22, 28, 34].map((y) => <path key={y} d={`M16 ${y} Q20 ${y + 4} 24 ${y} Q28 ${y + 4} 32 ${y}`} fill="none" stroke="#c9d3ea" strokeWidth="1.6" />)}<circle cx="24" cy="18" r="3" fill="#d9a8ff" {...s} strokeWidth={1.5} /></>,
+  'lucky-coin': <><circle cx="24" cy="24" r="17" fill="#f0c94a" {...s} /><circle cx="24" cy="24" r="12.5" fill="none" stroke="#b9902a" strokeWidth="2" /><g fill="#4aa85a" {...s} strokeWidth={1.4}><circle cx="24" cy="18" r="4.2" /><circle cx="24" cy="30" r="4.2" /><circle cx="18" cy="24" r="4.2" /><circle cx="30" cy="24" r="4.2" /></g><path d="M25 28 L28 36" stroke="#12161c" strokeWidth="2" /></>,
+  'wolf-tooth': <><path d="M16 6 Q24 2 32 6" fill="none" stroke="#8a6a3f" strokeWidth="2.5" /><path d="M16 6 Q10 30 20 42 Q26 30 30 18 Q32 10 32 6Z" fill="#f4efdf" {...s} /><path d="M20 14 Q18 26 22 36" fill="none" stroke="#d6cfba" strokeWidth="2.5" /></>,
+  'heart-charm': <><path d="M24 6 L24 12" stroke="#8a6a3f" strokeWidth="3" strokeLinecap="round" /><path d="M24 42 C8 30 6 20 12 15 C17 11 22 14 24 18 C26 14 31 11 36 15 C42 20 40 30 24 42Z" fill="#e0475b" {...s} /><path d="M14 20 Q16 16 20 17" fill="none" stroke="#fff" strokeOpacity=".6" strokeWidth="3" strokeLinecap="round" /></>,
+  'glass-eye': <><circle cx="24" cy="24" r="18" fill="#cfe9f5" opacity=".35" {...s} /><path d="M7 24 Q24 8 41 24 Q24 40 7 24Z" fill="#f4f6f0" {...s} /><circle cx="24" cy="24" r="8" fill="#b66bff" {...s} /><circle cx="24" cy="24" r="3.5" fill="#12161c" /><circle cx="21.5" cy="21.5" r="1.8" fill="#fff" /></>,
+  'thorn-ring': <><circle cx="24" cy="26" r="13" fill="none" stroke="#c9ccd2" strokeWidth="6" /><circle cx="24" cy="26" r="13" fill="none" stroke="#12161c" strokeWidth="1.5" opacity=".5" />{[[24, 7, 0], [38, 14, 50], [10, 14, -50], [41, 28, 90], [7, 28, -90]].map(([x, y, rot]) => <path key={`${x}${y}`} d="M-3 4 L0 -5 L3 4Z" transform={`translate(${x} ${y}) rotate(${rot})`} fill="#7ccf6a" {...s} strokeWidth={1.4} />)}<path d="M24 6 L18 2 L30 2Z" fill="#7ccf6a" opacity="0" /></>,
+  'vampire-seal': <><circle cx="24" cy="24" r="18" fill="#6e1f35" {...s} /><circle cx="24" cy="24" r="14" fill="none" stroke="#e0475b" strokeWidth="1.6" /><path d="M24 10 C32 20 34 26 24 38 C14 26 16 20 24 10Z" fill="#e0475b" {...s} strokeWidth={1.6} /><path d="M19 30 L21 36 L23 30 M25 30 L27 36 L29 30" fill="#fff" stroke="#12161c" strokeWidth="1.4" /></>,
+  'small-potion': <><path d="M20 6 L28 6 L28 14 L34 30 Q36 40 24 42 Q12 40 14 30 L20 14Z" fill="#e0475b" {...s} /><path d="M17 26 Q24 22 31 26 L33 32 Q34 38 24 40 Q14 38 15 32Z" fill="#ff7a8a" opacity=".6" /><rect x="19" y="3" width="10" height="5" rx="2" fill="#a77a4a" {...s} strokeWidth={1.6} /><path d="M20 18 L22 28" stroke="#fff" strokeOpacity=".5" strokeWidth="2.5" strokeLinecap="round" /></>,
+  'greater-potion': <><circle cx="24" cy="26" r="20" fill="#5fd1ff" opacity=".18" /><path d="M18 4 L30 4 L30 12 L40 30 Q42 42 24 44 Q6 42 8 30 L18 12Z" fill="#3e8cff" {...s} /><path d="M12 28 Q24 22 36 28 L38 34 Q38 40 24 42 Q10 40 10 34Z" fill="#7cc8ff" opacity=".6" /><rect x="17" y="1" width="14" height="6" rx="2" fill="#a77a4a" {...s} strokeWidth={1.6} /><path d="M18 17 L16 30" stroke="#fff" strokeOpacity=".55" strokeWidth="3" strokeLinecap="round" /><path d="M32 8 L33 11 L36 12 L33 13 L32 16 L31 13 L28 12 L31 11Z" fill="#fff" opacity=".9" /></>,
+  'iron-skin': <><path d="M24 5 L40 11 L40 24 Q40 36 24 43 Q8 36 8 24 L8 11Z" fill="#8a97a8" {...s} /><path d="M24 5 L24 43" stroke="#12161c" strokeWidth="2" opacity=".5" /><path d="M24 5 L40 11 L40 24 Q40 36 24 43Z" fill="#aebbcb" opacity=".6" /></>,
+  'battle-heart': <><path d="M24 42 C8 30 6 20 12 15 C17 11 22 14 24 18 C26 14 31 11 36 15 C42 20 40 30 24 42Z" fill="#c93a4f" {...s} /><path d="M24 36 Q16 30 18 24 Q22 26 22 20 Q30 24 30 30 Q30 34 24 36Z" fill="#ffa733" {...s} strokeWidth={1.5} /></>,
+  shielded: <><path d="M24 4 C30 9 36 9 41 9 L41 24 Q41 36 24 44 Q7 36 7 24 L7 9 C12 9 18 9 24 4Z" fill="#4aa8ff" {...s} /><path d="M24 12 L24 36 M14 22 L34 22" stroke="#e9f4ff" strokeWidth="3.5" strokeLinecap="round" /></>,
+  'cleaving-blow': <><path d="M8 34 Q24 4 40 34 Q24 20 8 34Z" fill="#e6ebef" {...s} /><path d="M12 38 Q24 14 36 38" fill="none" stroke="#ff7a5a" strokeWidth="3" strokeLinecap="round" strokeDasharray="2 5" /></>,
+  unyielding: <><path d="M12 22 L12 12 Q12 8 16 8 Q20 8 20 12 L20 8 Q24 4 27 8 L28 12 Q32 8 34 12 L36 28 Q36 40 26 42 L20 42 Q12 40 12 30Z" fill="#e0a46a" {...s} /><path d="M18 20 L18 28 M24 18 L24 28 M30 20 L30 28" stroke="#12161c" strokeWidth="1.8" /><path d="M6 14 L10 18 M42 14 L38 18 M24 2 L24 6" stroke="#ff7a5a" strokeWidth="3" strokeLinecap="round" /></>,
+  fortress: <><path d="M8 42 L8 18 L14 18 L14 12 L20 12 L20 18 L28 18 L28 12 L34 12 L34 18 L40 18 L40 42Z" fill="#8c8a98" {...s} /><path d="M20 42 L20 30 Q24 24 28 30 L28 42Z" fill="#3a3844" {...s} /><path d="M12 24 L12 28 M36 24 L36 28" stroke="#12161c" strokeWidth="3" /><path d="M24 4 L24 12 L32 8Z" fill="#ffa733" {...s} strokeWidth={1.6} /></>,
+  'quick-step': <><path d="M12 8 L26 8 L26 26 Q38 28 40 36 L40 40 L10 40 Q10 30 14 26Z" fill="#c98a4a" {...s} /><path d="M6 14 L16 14 M3 22 L12 22 M7 30 L14 30" stroke="#9ad7ff" strokeWidth="3" strokeLinecap="round" /><path d="M10 40 L40 40" stroke="#5b3d2a" strokeWidth="4" /></>,
+  'keen-eye': <><path d="M4 24 Q24 6 44 24 Q24 42 4 24Z" fill="#f4f6f0" {...s} /><circle cx="24" cy="24" r="9" fill="#ffa733" {...s} /><circle cx="24" cy="24" r="4" fill="#12161c" /><circle cx="21" cy="21" r="2" fill="#fff" /><path d="M24 2 L24 8 M8 6 L12 11 M40 6 L36 11" stroke="#ffa733" strokeWidth="2.5" strokeLinecap="round" /></>,
+  venom: <><path d="M24 4 C34 18 38 24 38 30 Q38 42 24 42 Q10 42 10 30 C10 24 14 18 24 4Z" fill="#6ed147" {...s} /><path d="M18 26 Q18 32 22 34" fill="none" stroke="#c9f5a8" strokeWidth="3" strokeLinecap="round" /><circle cx="21" cy="30" r="0" /><path d="M20 24 L28 24 M24 21 L24 32" stroke="#12161c" strokeWidth="0" /><circle cx="22" cy="28" r="2.2" fill="#12161c" /><circle cx="28" cy="28" r="2.2" fill="#12161c" /><path d="M22 34 L26 34" stroke="#12161c" strokeWidth="2" /></>,
+  bloodletting: <><path d="M24 4 C34 18 38 24 38 30 Q38 42 24 42 Q10 42 10 30 C10 24 14 18 24 4Z" fill="#d6283f" {...s} /><path d="M17 28 Q17 34 22 36" fill="none" stroke="#ff9aa6" strokeWidth="3" strokeLinecap="round" /><path d="M30 6 L34 12 L38 6" fill="none" stroke="#d6283f" strokeWidth="0" /></>,
+  'double-cut': <><path d="M8 40 L36 6 L40 10 L12 44Z" fill="#e6ebef" {...s} /><path d="M20 42 L44 14 L40 10 L16 38Z" fill="#cfd6dd" {...s} /><path d="M4 8 L10 12 M2 18 L9 20" stroke="#ff7a5a" strokeWidth="3" strokeLinecap="round" /></>,
+  phantom: <><path d="M10 42 L10 22 Q10 6 24 6 Q38 6 38 22 L38 42 L32 36 L28 42 L24 36 L20 42 L16 36Z" fill="#dfe9ff" {...s} opacity=".95" /><ellipse cx="19" cy="22" rx="3" ry="4.5" fill="#12161c" /><ellipse cx="29" cy="22" rx="3" ry="4.5" fill="#12161c" /><ellipse cx="24" cy="31" rx="3" ry="2.5" fill="#12161c" /></>,
+};
+
+export function ItemIcon({ id, rarity, size = 44, className = '' }: { id: string; rarity: Rarity; size?: number; className?: string }) {
+  const tone = RARITIES[rarity];
+  return (
+    <span className={`item-icon rarity-${rarity} ${className}`} style={{ width: size, height: size, ['--rarity' as string]: tone.color, ['--rarity-glow' as string]: tone.glow }}>
+      <svg viewBox="0 0 48 48" width={size * 0.78} height={size * 0.78} aria-hidden="true">{GLYPHS[id] ?? <circle cx="24" cy="24" r="14" fill={tone.color} {...s} />}</svg>
+    </span>
+  );
+}
