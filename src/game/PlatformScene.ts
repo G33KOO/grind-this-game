@@ -1,27 +1,21 @@
-import Phaser from 'phaser';
+﻿import Phaser from 'phaser';
 import { BALANCE, ZONES } from './content';
 import {
-  BOSS_POSITIONS, SECRET_POSITIONS, SHRINE_POSITION, WORLD_HEIGHT, WORLD_START, WORLD_WIDTH, clearance, generateDecor, isWalkable, noise, zoneAt, zoneScores,
+  BOSS_BLOCK_RADIUS, BOSS_POSITIONS, SECRET_POSITIONS, SHRINE_POSITION, WORLD_HEIGHT, WORLD_START, WORLD_WIDTH, clearance, generateDecor, isWalkable, noise, zoneScores,
   type Decor,
 } from './world';
 
-export type MapEvent = 'encounter' | 'shrine' | 'secret-one' | 'secret-two' | 'locked-zone' | `boss:${string}`;
+export type MapEvent = 'encounter' | 'shrine' | 'secret-one' | 'secret-two' | `boss:${string}`;
 export interface MapCallbacks {
   moved(x: number, y: number, distance: number): void;
   event(event: MapEvent): void;
   control(device: 'keyboard' | 'gamepad'): void;
-  canEnterZone(zoneId: string): boolean;
-  explored?(data: string): void;
   travel?(pendingDistance: number): void;
   isBossDefeated?(bossId: string): boolean;
   ready?(scene: PlatformScene): void;
 }
 
 const PLAYER_SPEED = 175;
-const FOG_CELL = 40;
-const FOG_COLUMNS = Math.ceil(WORLD_WIDTH / FOG_CELL);
-const FOG_ROWS = Math.ceil(WORLD_HEIGHT / FOG_CELL);
-const REVEAL_RADIUS = 6.5;
 const SOLID_KINDS: Partial<Record<Decor['kind'], number>> = {
   tree: 0.4, rock: 0.45, pond: 0.48, pillar: 0.45, tombstone: 0.4, lava: 0.45, obsidian: 0.42, 'dead-tree': 0.3, log: 0.3,
 };
@@ -36,7 +30,7 @@ export class PlatformScene extends Phaser.Scene {
   private held = new Set<string>();
   private moveKeys = { up: 'KeyW', down: 'KeyS', left: 'KeyA', right: 'KeyD' };
   private walls!: Phaser.Physics.Arcade.StaticGroup;
-  private bosses: { id: string; body: Phaser.GameObjects.Arc; visual: Phaser.GameObjects.Graphics }[] = [];
+  private bosses: { id: string; body: Phaser.GameObjects.Zone; visual: Phaser.GameObjects.Graphics }[] = [];
   private trail!: Phaser.GameObjects.Graphics;
   private trailPoints: { x: number; y: number }[] = [];
   private callbacks: MapCallbacks;
@@ -46,25 +40,15 @@ export class PlatformScene extends Phaser.Scene {
   private lastY = 0;
   private shrineReady = true;
   private seenSecrets = new Set<string>();
-  private zoneLockNotified = false;
   private lastDevice: 'keyboard' | 'gamepad' = 'keyboard';
-  private explored = new Uint8Array(FOG_COLUMNS * FOG_ROWS);
-  private fog!: Phaser.Textures.CanvasTexture;
-  private fogDirty = true;
-  private lastFogCell = -1;
-  private lastExploredSave = 0;
 
   constructor(
     callbacks: MapCallbacks,
     private startPosition: { x: number; y: number },
     private readonly playerColor: number,
-    exploredData?: string,
   ) {
     super('world');
     this.callbacks = callbacks;
-    if (exploredData?.length === this.explored.length) {
-      for (let index = 0; index < exploredData.length; index++) this.explored[index] = exploredData[index] === '1' ? 1 : 0;
-    }
   }
 
   private cameraZoom(height: number): number {
@@ -72,7 +56,7 @@ export class PlatformScene extends Phaser.Scene {
   }
 
   private paintGround(): void {
-    const cell = 4;
+    const cell = 2;
     const columns = Math.ceil(WORLD_WIDTH / cell);
     const rows = Math.ceil(WORLD_HEIGHT / cell);
     const ground = this.textures.createCanvas('ground', columns, rows)!;
@@ -85,20 +69,26 @@ export class PlatformScene extends Phaser.Scene {
       const y = row * cell + cell / 2;
       const [first, second] = zoneScores(x, y);
       const depth = clearance(x, y);
-      if (depth <= 0) {
-        // Mur : plein, mat, sans grille, avec un halo qui s'éteint vers l'intérieur de la roche
+      const neon = neonOf(first.zone.id);
+      // Mur : plein et mat, bord anticrénelé par alpha, halo qui s'éteint vers l'intérieur de la roche
+      const coverage = Math.min(1, Math.max(0, 0.5 - depth / cell));
+      if (coverage > 0) {
         const halo = Math.max(0, 1 - -depth / 26);
-        const wallColor = css(this.blend(0x010204, neonOf(first.zone.id), halo * 0.12));
-        wallContext.fillStyle = wallColor;
+        wallContext.fillStyle = css(this.blend(0x010204, neon, halo * 0.12));
+        wallContext.globalAlpha = coverage;
         wallContext.fillRect(column, row, 1, 1);
+        wallContext.globalAlpha = 1;
+      }
+      if (depth <= 0) {
+        context.fillStyle = css(this.blend(0x05080d, neon, 1));
+        context.fillRect(column, row, 1, 1);
         continue;
       }
-      const neon = neonOf(first.zone.id);
       let color = this.blend(0x05080d, neon, 0.05 + noise(x / 160, y / 160) * 0.07);
       const gap = Math.abs(second.score - first.score);
       if (gap < 7) color = this.blend(color, this.blend(neon, neonOf(second.zone.id), 0.5), (1 - gap / 7) * 0.85);
       else if (gap < 38) color = this.blend(color, neon, ((38 - gap) / 38) * 0.1);
-      if (depth < 3.5) color = this.blend(color, neon, 1);
+      if (depth < 1.6) color = this.blend(color, neon, 1 - depth / 1.6 * 0.3);
       else if (depth < 14) color = this.blend(color, neon, ((14 - depth) / 14) * 0.35);
       context.fillStyle = css(color);
       context.fillRect(column, row, 1, 1);
@@ -124,17 +114,17 @@ export class PlatformScene extends Phaser.Scene {
     const { x, y, size: s, variant: v } = decor;
     const accent = NEON[decor.zone];
     const solid = !!SOLID_KINDS[decor.kind];
-    const k = solid ? 1 : 0.28;
+    const k = solid ? 1 : 0.14;
     const glow = (color: number, draw: () => void) => {
-      const passes = solid ? [[7, 0.07], [3.5, 0.18], [1.8, 1]] : [[1, k]];
+      const passes = solid ? [[5, 0.06], [2.4, 0.16], [1.1, 1]] : [[1, k]];
       for (const [width, alpha] of passes) { graphics.lineStyle(width, color, alpha); draw(); }
     };
     if (solid) {
       const ratio = SOLID_KINDS[decor.kind]!;
       const cy = y + (decor.kind === 'tree' ? s * 0.2 : 0);
       const radius = Math.max(5, s * ratio);
-      graphics.fillStyle(accent, 0.1).fillCircle(x, cy, radius);
-      graphics.lineStyle(1, accent, 0.45).strokeCircle(x, cy, radius);
+      graphics.fillStyle(accent, 0.14).fillCircle(x, cy, radius);
+      graphics.lineStyle(1, accent, 0.8).strokeCircle(x, cy, radius);
     }
     const poly = (points: { x: number; y: number }[], color: number, fill = 0.9) => {
       graphics.fillStyle(VOID, solid ? fill : 0.3).fillPoints(points, true);
@@ -164,8 +154,6 @@ export class PlatformScene extends Phaser.Scene {
         });
         break;
       case 'bush':
-        graphics.fillStyle(VOID, 0.3).fillCircle(x, y, s * 0.36);
-        glow(accent, () => graphics.strokeCircle(x, y, s * 0.36));
         dot(x, y, Math.max(1.2, s * 0.08), accent);
         break;
       case 'flower':
@@ -238,7 +226,8 @@ export class PlatformScene extends Phaser.Scene {
     const graphics = this.make.graphics({ x: 0, y: 0 }, false);
     decor.sort((a, b) => Number(!!SOLID_KINDS[a.kind]) - Number(!!SOLID_KINDS[b.kind]) || a.y - b.y);
     for (const entry of decor) this.drawDecor(graphics, entry);
-    const layer = this.add.renderTexture(0, 0, WORLD_WIDTH, WORLD_HEIGHT).setOrigin(0).setDepth(1);
+    const layer = this.add.renderTexture(0, 0, WORLD_WIDTH * 2, WORLD_HEIGHT * 2).setOrigin(0).setScale(0.5).setDepth(1);
+    graphics.setScale(2);
     layer.draw(graphics);
     graphics.destroy();
     this.walls = this.physics.add.staticGroup();
@@ -271,46 +260,6 @@ export class PlatformScene extends Phaser.Scene {
     }
   }
 
-  private buildFog(): void {
-    this.fog = this.textures.createCanvas('fog', FOG_COLUMNS, FOG_ROWS)!;
-    this.add.image(0, 0, 'fog').setOrigin(0).setDisplaySize(FOG_COLUMNS * FOG_CELL, FOG_ROWS * FOG_CELL).setDepth(20);
-  }
-
-  private revealAround(x: number, y: number): void {
-    const column = Math.floor(x / FOG_CELL);
-    const row = Math.floor(y / FOG_CELL);
-    const key = row * FOG_COLUMNS + column;
-    if (key === this.lastFogCell) return;
-    this.lastFogCell = key;
-    const reach = Math.ceil(REVEAL_RADIUS);
-    for (let dy = -reach; dy <= reach; dy++) for (let dx = -reach; dx <= reach; dx++) {
-      const cx = column + dx;
-      const cy = row + dy;
-      if (cx < 0 || cy < 0 || cx >= FOG_COLUMNS || cy >= FOG_ROWS || dx * dx + dy * dy > REVEAL_RADIUS * REVEAL_RADIUS) continue;
-      const index = cy * FOG_COLUMNS + cx;
-      if (!this.explored[index]) { this.explored[index] = 1; this.fogDirty = true; }
-    }
-  }
-
-  private paintFog(): void {
-    const context = this.fog.getContext();
-    const image = context.createImageData(FOG_COLUMNS, FOG_ROWS);
-    for (let index = 0; index < this.explored.length; index++) {
-      const offset = index * 4;
-      image.data[offset] = 6;
-      image.data[offset + 1] = 9;
-      image.data[offset + 2] = 13;
-      image.data[offset + 3] = this.explored[index] ? 0 : 255;
-    }
-    context.putImageData(image, 0, 0);
-    this.fog.refresh();
-    this.fogDirty = false;
-  }
-
-  private saveExplored(): void {
-    this.callbacks.explored?.(Array.from(this.explored, (value) => (value ? '1' : '0')).join(''));
-  }
-
   create(): void {
     this.physics.world.setBounds(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
     this.bosses = [];
@@ -324,10 +273,12 @@ export class PlatformScene extends Phaser.Scene {
     }
     for (const zone of ZONES) {
       const position = BOSS_POSITIONS[zone.boss];
-      const body = this.add.circle(position.x, position.y, 28, 0xff2a4a, 0).setDepth(2);
+      const body = this.add.zone(position.x, position.y, BOSS_BLOCK_RADIUS * 2, BOSS_BLOCK_RADIUS * 2).setDepth(2);
       this.physics.add.existing(body, true);
+      (body.body as Phaser.Physics.Arcade.StaticBody).setCircle(BOSS_BLOCK_RADIUS);
       const visual = this.add.graphics().setDepth(2);
-      visual.fillStyle(0xff2a4a, 0.1).fillCircle(position.x, position.y, 64);
+      visual.fillStyle(0xff2a4a, 0.1).fillCircle(position.x, position.y, BOSS_BLOCK_RADIUS);
+      this.neonRing(visual, position.x, position.y, BOSS_BLOCK_RADIUS - 6, neonOf(zone.id));
       this.neonRing(visual, position.x, position.y, 30, neonOf(zone.id));
       this.neonRing(visual, position.x, position.y, 16, 0xff2a4a);
       this.neonRing(visual, position.x, position.y, 6, 0xff8a9a);
@@ -335,28 +286,29 @@ export class PlatformScene extends Phaser.Scene {
       this.bosses.push({ id: zone.boss, body, visual });
     }
     const playerGraphic = this.make.graphics({ x: 0, y: 0 });
-    for (const [radius, alpha] of [[22, 0.05], [18, 0.1], [14, 0.18]]) playerGraphic.fillStyle(this.playerColor, alpha).fillCircle(24, 24, radius);
-    playerGraphic.fillStyle(VOID, 0.95).fillCircle(24, 24, 9);
-    playerGraphic.lineStyle(4, this.playerColor, 0.25).strokeCircle(24, 24, 9);
-    playerGraphic.lineStyle(1.6, this.playerColor, 1).strokeCircle(24, 24, 9);
-    playerGraphic.fillStyle(0xffffff, 1).fillCircle(24, 24, 3);
-    playerGraphic.generateTexture('player-dot', 48, 48);
+    for (const [radius, alpha] of [[44, 0.05], [36, 0.1], [28, 0.18]]) playerGraphic.fillStyle(this.playerColor, alpha).fillCircle(48, 48, radius);
+    playerGraphic.fillStyle(VOID, 0.95).fillCircle(48, 48, 18);
+    playerGraphic.lineStyle(6, this.playerColor, 0.22).strokeCircle(48, 48, 18);
+    playerGraphic.lineStyle(2, this.playerColor, 1).strokeCircle(48, 48, 18);
+    playerGraphic.fillStyle(0xffffff, 1).fillCircle(48, 48, 5);
+    playerGraphic.generateTexture('player-dot', 96, 96);
     playerGraphic.destroy();
     this.trail = this.add.graphics().setDepth(4);
     const spawn = isWalkable(this.startPosition.x, this.startPosition.y, 12) ? this.startPosition : WORLD_START;
     this.startPosition = { ...spawn };
-    this.player = this.physics.add.sprite(spawn.x, spawn.y, 'player-dot').setDepth(5);
-    this.player.setCircle(9, 15, 15).setCollideWorldBounds(true).setBounce(0);
+    this.player = this.physics.add.sprite(spawn.x, spawn.y, 'player-dot').setScale(0.5).setDepth(5);
+    this.player.setCircle(18, 30, 30).setCollideWorldBounds(true).setBounce(0);
     this.physics.add.collider(this.player, this.walls);
     for (const boss of this.bosses) {
-      this.physics.add.overlap(this.player, boss.body, () => {
-        if (!this.callbacks.isBossDefeated?.(boss.id)) this.callbacks.event(`boss:${boss.id}`);
-      });
+      this.physics.add.collider(
+        this.player, boss.body,
+        () => this.callbacks.event(`boss:${boss.id}`),
+        () => !this.callbacks.isBossDefeated?.(boss.id),
+      );
     }
     this.input.keyboard!.on('keydown', (event: KeyboardEvent) => this.held.add(event.code));
     this.input.keyboard!.on('keyup', (event: KeyboardEvent) => this.held.delete(event.code));
     this.game.events.on(Phaser.Core.Events.BLUR, () => this.held.clear());
-    this.buildFog();
     this.cameras.main.setBounds(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
     this.cameras.main.setZoom(this.cameraZoom(this.scale.height));
     this.cameras.main.startFollow(this.player, true, 0.12, 0.12);
@@ -365,10 +317,7 @@ export class PlatformScene extends Phaser.Scene {
     this.input.keyboard?.on('keydown', () => this.setDevice('keyboard'));
     this.lastX = this.startPosition.x;
     this.lastY = this.startPosition.y;
-    this.revealAround(this.lastX, this.lastY);
-    this.paintFog();
     this.events.on('resume-position', (x: number, y: number) => this.player.setPosition(x, y));
-    this.events.once('shutdown', () => this.saveExplored());
     this.callbacks.ready?.(this);
   }
 
@@ -400,15 +349,6 @@ export class PlatformScene extends Phaser.Scene {
     if (!isWalkable(this.player.x + x * PLAYER_SPEED * dt, this.player.y, margin)) x = 0;
     if (!isWalkable(this.player.x, this.player.y + y * PLAYER_SPEED * dt, margin)) y = 0;
     this.player.setVelocity(x * PLAYER_SPEED, y * PLAYER_SPEED);
-    const playerZone = zoneAt(this.player.x, this.player.y);
-    if (!this.callbacks.canEnterZone(playerZone.id)) {
-      this.player.setPosition(this.lastX, this.lastY);
-      this.player.setVelocity(0, 0);
-      if (!this.zoneLockNotified) this.callbacks.event('locked-zone');
-      this.zoneLockNotified = true;
-      return;
-    }
-    this.zoneLockNotified = false;
     const actualDistance = Math.hypot(this.player.x - this.lastX, this.player.y - this.lastY);
     this.lastX = this.player.x;
     this.lastY = this.player.y;
@@ -438,12 +378,6 @@ export class PlatformScene extends Phaser.Scene {
     if (!this.seenSecrets.has('two') && Phaser.Math.Distance.Between(this.player.x, this.player.y, SECRET_POSITIONS['secret-two'].x, SECRET_POSITIONS['secret-two'].y) < 26) {
       this.seenSecrets.add('two');
       this.callbacks.event('secret-two');
-    }
-    this.revealAround(this.player.x, this.player.y);
-    if (this.fogDirty) this.paintFog();
-    if (_time - this.lastExploredSave > 3000) {
-      this.lastExploredSave = _time;
-      this.saveExplored();
     }
   }
 

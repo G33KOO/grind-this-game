@@ -12,10 +12,10 @@ export const SECRET_POSITIONS = {
   'secret-two': { x: 1880, y: 1420 },
 } as const;
 export const BOSS_POSITIONS: Record<string, { x: number; y: number }> = {
-  'meadow-boss': { x: 620, y: 380 },
-  'forest-boss': { x: 1400, y: 370 },
-  'marsh-boss': { x: 2190, y: 520 },
-  'crypt-boss': { x: 2200, y: 1340 },
+  'meadow-boss': { x: 800, y: 500 },
+  'forest-boss': { x: 1600, y: 500 },
+  'marsh-boss': { x: 2000, y: 875 },
+  'crypt-boss': { x: 1600, y: 1250 },
   'final-boss': { x: 960, y: 1250 },
 };
 
@@ -29,6 +29,8 @@ export const ZONE_SHAPES: Record<ZoneId, { x: number; y: number; weight: number;
 };
 
 const CORRIDOR_WIDTH = 130;
+// Un boss de passage remplit toute la largeur du couloir qu'il garde.
+export const BOSS_BLOCK_RADIUS = CORRIDOR_WIDTH / 2 + 10;
 export const PATHS: { from: { x: number; y: number }; to: { x: number; y: number } }[] = [
   { from: ZONE_SHAPES.meadow, to: ZONE_SHAPES.forest },
   { from: ZONE_SHAPES.forest, to: ZONE_SHAPES.marsh },

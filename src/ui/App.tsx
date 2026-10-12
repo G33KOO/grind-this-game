@@ -12,6 +12,7 @@ import { NeonLogo } from './NeonLogo';
 import { PlatformScene, type MapCallbacks, type MapEvent } from '../game/PlatformScene';
 import { ZONE_SHAPES, zoneAt } from '../game/world';
 import { BattleScene } from './BattleScene';
+import { CombatRecap, type CombatRecapData } from './CombatRecap';
 import { ItemIcon, RARITIES, type Rarity } from './icons';
 
 const passiveRarity = (weight: number): Rarity => weight >= 4 ? 'common' : weight >= 3 ? 'uncommon' : weight >= 2 ? 'rare' : weight >= 1 ? 'epic' : 'legendary';
@@ -41,6 +42,7 @@ export function App() {
   const [devItem, setDevItem] = useState(ITEMS[0].id);
   const [devEnemy, setDevEnemy] = useState(ENEMIES[0].id);
   const [notice, setNotice] = useState('');
+  const [recap, setRecap] = useState<CombatRecapData | null>(null);
   const [passiveOffers, setPassiveOffers] = useState<string[]>([]);
   const gameRef = useRef<Phaser.Game | null>(null);
   const sceneRef = useRef<PlatformScene | null>(null);
@@ -151,8 +153,6 @@ export function App() {
     } else if (event.startsWith('boss:')) {
       const bossId = event.slice(5);
       if (!current.defeatedBosses.includes(bossId)) launchCombat([bossId]);
-    } else if (event === 'locked-zone') {
-      setNotice('Zone verrouillée : battez le gardien de la zone précédente pour passer.');
     } else if (event === 'shrine') {
       if (current.usedShrines.includes('meadow-shrine')) {
         setNotice('Le sanctuaire a déjà été utilisé pendant cette partie.');
@@ -206,18 +206,12 @@ export function App() {
         const meter = runRef.current?.encounterMeter ?? 0;
         if (bar) bar.style.width = `${Math.min(1, meter + pending * BALANCE.encounterMeterChancePerUnit / BALANCE.maxEncounterMeter) * 100}%`;
       },
-      explored: (data) => {
-        if (runRef.current) runRef.current = { ...runRef.current, explored: data };
-      },
       control: setDevice,
-      canEnterZone: (zoneId) => {
-        const zone = ZONES.find((entry) => entry.id === zoneId);
-        return !!zone && (developmentMode || !zone.requires || !!runRef.current?.defeatedBosses.includes(zone.requires) ||
-          (zone.id === 'ashen' && profileRef.current.paths.includes('ashen-path')));
-      },
-      isBossDefeated: (bossId) => !!runRef.current?.defeatedBosses.includes(bossId),
+      isBossDefeated: (bossId) => !!runRef.current?.defeatedBosses.includes(bossId) ||
+        developmentMode ||
+        (bossId === 'crypt-boss' && profileRef.current.paths.includes('ashen-path')),
     };
-    const worldScene = new PlatformScene(callbacks, run.position, HEROES[run.hero].color, run.explored);
+    const worldScene = new PlatformScene(callbacks, run.position, HEROES[run.hero].color);
     const game = new Phaser.Game({
       type: Phaser.CANVAS,
       parent: 'game-canvas',
@@ -299,10 +293,7 @@ export function App() {
       .map((id) => ACHIEVEMENTS.find((entry) => entry.id === id)?.name).filter(Boolean);
     const rankBefore = masteryRank(profileRef.current.mastery[updated.hero]);
     const rankAfter = masteryRank(profileAfter.mastery[updated.hero]);
-    const progressNotice = [
-      ...(rankAfter > rankBefore ? [`Maîtrise ${HEROES[updated.hero].name} niveau ${rankAfter} !`] : []),
-      ...(newAchievements.length ? [`Succès : ${newAchievements.join(', ')}`] : []),
-    ].join(' · ');
+    const before = { level: current.level, xp: current.xp, xpToNext: current.xpToNext, inventoryCount: current.inventory.length };
     try {
       await saveRun(updated);
     } catch (saveError) {
@@ -312,6 +303,22 @@ export function App() {
     current = updated;
     syncRun(updated);
     const profileSaved = updateProfile(profileAfter);
+    if (result.over === 'win' && updated.result === 'active') {
+      setRecap({
+        xpGained: defeated.reduce((sum, enemy) => sum + enemy.xp, 0),
+        kills: defeated.length,
+        levelBefore: before.level,
+        levelAfter: updated.level,
+        fillBefore: before.xp / Math.max(1, before.xpToNext),
+        fillAfter: updated.xp / Math.max(1, updated.xpToNext),
+        loot: updated.inventory.slice(before.inventoryCount).map((instance) => ITEMS.find((item) => item.id === instance.itemId)?.name).filter((name): name is string => !!name),
+        notes: [
+          ...(rankAfter > rankBefore ? [`Maîtrise ${HEROES[updated.hero].name} : rang ${rankAfter} !`] : []),
+          ...newAchievements.map((name) => `Succès : ${name}`),
+        ],
+      });
+      return;
+    }
     syncCombat(null);
     if (updated.pendingPassivePicks > 0 && updated.result === 'active') {
       setPassiveOffers(passiveChoices(updated, profileRef.current));
@@ -325,9 +332,21 @@ export function App() {
     } else {
       setScreen('world');
       sceneRef.current?.togglePause(false);
-      setNotice([result.over === 'win' ? `Combat gagné : ${defeated.length} ennemi(s), ${defeated.reduce((sum, enemy) => sum + enemy.xp, 0)} XP.` : 'La partie est terminée.', progressNotice].filter(Boolean).join(' — '));
     }
   }, [syncCombat, syncRun, updateProfile]);
+
+  const continueAfterCombat = () => {
+    const updated = runRef.current;
+    setRecap(null);
+    syncCombat(null);
+    if (updated && updated.pendingPassivePicks > 0) {
+      setPassiveOffers(passiveChoices(updated, profileRef.current));
+      setScreen('stats');
+    } else {
+      setScreen('world');
+      sceneRef.current?.togglePause(false);
+    }
+  };
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -412,6 +431,12 @@ export function App() {
     sceneRef.current?.togglePause(false);
   };
 
+  const abandonRun = () => {
+    if (!window.confirm('Abandonner la partie en cours ? Votre progression de cette partie sera perdue (succès et maîtrise conservés).')) return;
+    syncRun(null); syncCombat(null); setNewRunSelection(false); setScreen('title');
+    void saveRun(null).catch((saveError: unknown) => setError(saveError instanceof Error ? saveError.message : 'Échec de sauvegarde.'));
+  };
+
   if (!run || screen === 'title') {
     return <main className="shell title-screen">
       <div className="title-grid" aria-hidden="true" />
@@ -421,6 +446,7 @@ export function App() {
       {run?.result === 'active' && !newRunSelection && <>
         <button className="primary" onClick={() => setScreen('world')}>Reprendre la partie</button>
         <button onClick={() => setNewRunSelection(true)}>Nouvelle partie</button>
+        <button className="danger" onClick={abandonRun}>Abandonner la partie</button>
       </>}
       {(!run || run.result !== 'active' || newRunSelection) && <div className="hero-picks">
         {(['warrior', 'assassin'] as const).map((hero) => <button key={hero} className="hero-card" style={{ ['--accent' as string]: hero === 'warrior' ? '#2ee6c8' : '#ff8a4d' }} onClick={() => startGame(hero)}>
@@ -450,6 +476,7 @@ export function App() {
       <div className="title-menu">
         <button onClick={() => setTitlePanel('achievements')}>Succès · {profile.achievements.length}/{ACHIEVEMENTS.length}</button>
         <button onClick={() => setTitlePanel('settings')}>Paramètres</button>
+        <button onClick={() => window.close()}>Quitter</button>
       </div>
       {titlePanel && <div className="title-overlay"><section className="panel modal-panel">
         <PanelHeading label={titlePanel === 'settings' ? 'PRÉFÉRENCES' : 'PROGRESSION PERMANENTE'} title={titlePanel === 'settings' ? 'Paramètres' : 'Succès'} onClose={() => setTitlePanel(null)} />
@@ -478,10 +505,9 @@ export function App() {
           </div>
         </div>
       </div>
-      <div className="world-location" data-tip="Zone actuelle">{zoneAt(run.position.x, run.position.y).name}</div>
       <nav aria-label="Menu du jeu">
         <button aria-label="Inventaire" data-tip="Inventaire et équipement (I)" disabled={screen === 'combat'} onClick={openInventory}><span aria-hidden="true">▣</span><kbd>I</kbd></button>
-        <button aria-label="Personnage" data-tip="Statistiques, maîtrise et passifs (C)" disabled={screen === 'combat'} onClick={() => { if (run.pendingPassivePicks > 0) setPassiveOffers(passiveChoices(run, profile)); setScreen('stats'); sceneRef.current?.togglePause(true); }}><span aria-hidden="true">✦</span><kbd>C</kbd></button>
+        <button className={run.unspentPoints + run.pendingPassivePicks > 0 ? 'has-alert' : ''} aria-label={run.unspentPoints + run.pendingPassivePicks > 0 ? `Personnage : ${run.unspentPoints} point(s) à répartir, ${run.pendingPassivePicks} passif(s) à choisir` : 'Personnage'} data-tip={run.unspentPoints + run.pendingPassivePicks > 0 ? `${run.unspentPoints} point(s) à répartir · ${run.pendingPassivePicks} passif(s) à choisir (C)` : 'Statistiques, maîtrise et passifs (C)'} disabled={screen === 'combat'} onClick={() => { if (run.pendingPassivePicks > 0) setPassiveOffers(passiveChoices(run, profile)); setScreen('stats'); sceneRef.current?.togglePause(true); }}><span aria-hidden="true">✦</span><kbd>C</kbd>{run.unspentPoints + run.pendingPassivePicks > 0 && <b className="alert-badge" aria-hidden="true">{run.unspentPoints + run.pendingPassivePicks}</b>}</button>
         <button aria-label="Succès" data-tip="Succès débloqués et à débloquer" disabled={screen === 'combat'} onClick={() => { setScreen('achievements'); sceneRef.current?.togglePause(true); }}><span aria-hidden="true">★</span></button>
         <button aria-label="Options" data-tip="Paramètres : volume, vitesse, plein écran" disabled={screen === 'combat'} onClick={() => setScreen('settings')}><span aria-hidden="true">⚙</span></button>
         <button aria-label={`Vitesse du jeu ×${settings.combatSpeed}`} data-tip={`Vitesse du combat : ×${settings.combatSpeed} (cliquer pour passer à ×${settings.combatSpeed === 1 ? 2 : settings.combatSpeed === 2 ? 4 : 1})`} onClick={() => setSettings({ ...settings, combatSpeed: settings.combatSpeed === 1 ? 2 : settings.combatSpeed === 2 ? 4 : 1 })}><span aria-hidden="true">×{settings.combatSpeed}</span></button>
@@ -490,6 +516,7 @@ export function App() {
     <section className={`stage ${screen === 'summary' ? 'stage-hidden' : ''}`} aria-label="Carte du monde">
       <div id="game-canvas" />
       {screen !== 'world' && <div className="stage-veil" />}
+      <div className="world-location" aria-label="Zone actuelle">{zoneAt(run.position.x, run.position.y).name}</div>
       <div className="encounter-bar" role="progressbar" aria-label="Danger de rencontre"><span>DANGER</span><div className="encounter-track"><i ref={encounterBarRef} /></div></div>
       {screen === 'world' && notice && <div className="floating-notice">{notice}<button onClick={() => setNotice('')} aria-label="Fermer">×</button></div>}
       {screen === 'world' && <div className="map-legend"><span>{device === 'gamepad' ? 'Manette détectée' : 'WASD · ZQSD · Flèches'}</span><span>Vitesse : bouton ×1/×2/×4</span></div>}
@@ -516,6 +543,9 @@ export function App() {
       speed={settings.combatSpeed} saveError={!!error}
       onTarget={(index) => { targetRef.current = index; syncCombat({ ...combat }); }}
       onRetry={() => { setError(''); void resolveCombat(combat); }} />}
+    {screen === 'combat' && combat && recap && <CombatRecap recap={recap} points={run.unspentPoints} pendingPassives={run.pendingPassivePicks}
+      stats={(['strength', 'speed', 'luck', 'defense', 'maxHp'] as const).map((key) => ({ key, label: statLabel(key) }))}
+      onSpend={(key, amount) => pickStat(key as keyof typeof HEROES.warrior.stats, amount)} onContinue={continueAfterCombat} />}
 
     {screen === 'inventory' && <section className="panel modal-panel">
       <PanelHeading label="ÉQUIPEMENT" title="Inventaire" onClose={backToWorld} />

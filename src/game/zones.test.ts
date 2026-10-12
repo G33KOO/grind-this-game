@@ -42,13 +42,18 @@ describe('zones, groups and bosses', () => {
     expect(ZONES[0].maxGroup).toBe(1);
   });
 
-  it('places every zone boss inside its own zone and defines it as an enemy', () => {
-    for (const zone of ZONES) {
-      const position = BOSS_POSITIONS[zone.boss];
-      expect(position).toBeDefined();
-      expect(zoneAt(position.x, position.y).id).toBe(zone.id);
-      expect(ENEMIES.some((enemy) => enemy.id === zone.boss)).toBe(true);
-    }
+  it('places each gate boss in the middle of the corridor leading to the next zone', () => {
+    PATHS.forEach(({ from, to }, index) => {
+      const position = BOSS_POSITIONS[ZONES[index].boss];
+      expect(position).toEqual({ x: (from.x + to.x) / 2, y: (from.y + to.y) / 2 });
+      expect(isWalkable(position.x, position.y, 30)).toBe(true);
+    });
+    const last = ZONES[ZONES.length - 1];
+    expect(zoneAt(BOSS_POSITIONS[last.boss].x, BOSS_POSITIONS[last.boss].y).id).toBe(last.id);
+  });
+
+  it('defines every zone boss as an enemy', () => {
+    for (const zone of ZONES) expect(ENEMIES.some((enemy) => enemy.id === zone.boss)).toBe(true);
   });
 
   it('forms a progression chain where each zone needs the previous boss', () => {
