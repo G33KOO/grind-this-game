@@ -1,6 +1,6 @@
-import { ACHIEVEMENTS, BALANCE, ENEMIES, HEROES, ITEMS, PASSIVES, ZONES } from './content';
+import { ACHIEVEMENTS, BALANCE, ENEMIES, HEROES, ITEMS, PASSIVES, ZONES, masteryRank } from './content';
 import { WORLD_START } from './world';
-import type { CombatState, Effect, HeroId, ItemDefinition, ItemInstance, Profile, RunState, Slot, Stats } from './types';
+import type { AchievementDefinition, CombatState, Effect, HeroId, ItemDefinition, ItemInstance, Profile, RunState, Slot, Stats } from './types';
 
 export const clamp = (value: number, min: number, max: number): number =>
   Math.min(max, Math.max(min, Number.isFinite(value) ? value : min));
@@ -111,7 +111,7 @@ export function passiveChoices(run: RunState, profile: Profile): string[] {
   const candidates = PASSIVES.filter((passive) => {
     if (passive.hero !== run.hero && passive.hero !== 'both') return false;
     if (passive.unlockAchievement && !profile.achievements.includes(passive.unlockAchievement)) return false;
-    if (passive.masteryRequired && profile.mastery[run.hero] < passive.masteryRequired) return false;
+    if (passive.masteryRequired && masteryRank(profile.mastery[run.hero]) < passive.masteryRequired) return false;
     if (profile.unlockedPassives.includes(passive.id) || !passive.unlockAchievement) {
       return (run.passives.find((rank) => rank.id === passive.id)?.rank ?? 0) < passive.maxRank;
     }
@@ -210,28 +210,51 @@ export function rollLoot(run: RunState, enemyId: string, profile: Profile): { ru
   };
 }
 
+export function creditMastery(profile: Profile, run: RunState): { profile: Profile; run: RunState } {
+  if (run.developerMode) return { profile, run };
+  const earned = Math.max(0, run.level - 1);
+  const gained = Math.max(0, earned - (run.masteryBanked ?? 0));
+  if (gained === 0) return { profile, run };
+  return {
+    profile: { ...profile, mastery: { ...profile.mastery, [run.hero]: profile.mastery[run.hero] + gained } },
+    run: { ...run, masteryBanked: earned },
+  };
+}
+
+export function achievementMet(achievement: AchievementDefinition, run: RunState, profile: Profile): boolean {
+  if (achievement.hero && achievement.hero !== run.hero) return false;
+  const { condition } = achievement;
+  switch (condition.kind) {
+    case 'kills': return run.kills >= condition.value;
+    case 'level': return run.level >= condition.value;
+    case 'boss': return run.defeatedBosses.includes(condition.value);
+    case 'secrets': return run.secrets.length >= condition.value;
+    case 'masteryRank': return masteryRank(profile.mastery[run.hero]) >= condition.value;
+  }
+}
+
+export function applyProgress(profile: Profile, run: RunState): { profile: Profile; run: RunState } {
+  const credited = creditMastery(profile, run);
+  return { profile: addAchievements(credited.profile, credited.run), run: credited.run };
+}
+
 export function addAchievements(profile: Profile, run: RunState): Profile {
-  const earned = ACHIEVEMENTS.filter((achievement) => {
-    if (achievement.id === 'first-kill') return run.kills >= 1;
-    if (achievement.id === 'ten-kills') return run.kills >= 10;
-    return run.defeatedBosses.includes('final-boss');
-  }).map((achievement) => achievement.id);
-  const achievements = [...new Set([...profile.achievements, ...earned])];
-  const unlocks = ACHIEVEMENTS.flatMap((achievement) =>
-    achievements.includes(achievement.id) && 'unlocks' in achievement ? achievement.unlocks : []);
-  const paths = ACHIEVEMENTS.flatMap((achievement) =>
-    achievements.includes(achievement.id) && 'path' in achievement ? [achievement.path] : []);
+  let achievements = [...profile.achievements];
+  // Une récompense de maîtrise peut en débloquer une autre : on itère jusqu'à stabilité.
+  for (let pass = 0; pass < ACHIEVEMENTS.length; pass++) {
+    const earned = ACHIEVEMENTS.filter((achievement) => achievementMet(achievement, run, profile)).map((achievement) => achievement.id);
+    const merged = [...new Set([...achievements, ...earned])];
+    if (merged.length === achievements.length) break;
+    achievements = merged;
+  }
+  const unlocks = ACHIEVEMENTS.flatMap((achievement) => achievements.includes(achievement.id) ? achievement.unlocks ?? [] : []);
+  const paths = ACHIEVEMENTS.flatMap((achievement) => achievements.includes(achievement.id) && achievement.path ? [achievement.path] : []);
   const unlockedItems = [...new Set([...profile.unlockedItems, ...unlocks.filter((id) => ITEMS.some((item) => item.id === id))])];
-  const mastery = { ...profile.mastery, [run.hero]: Math.max(profile.mastery[run.hero], run.kills + run.victories * 5) };
-  const masteredPassives = PASSIVES.filter((passive) =>
-    passive.hero === run.hero && passive.masteryRequired !== undefined &&
-    mastery[run.hero] >= passive.masteryRequired).map((passive) => passive.id);
   const unlockedPassives = [...new Set([
     ...profile.unlockedPassives,
     ...unlocks.filter((id) => PASSIVES.some((passive) => passive.id === id)),
-    ...masteredPassives,
   ])];
-  return { ...profile, achievements, unlockedItems, unlockedPassives, paths: [...new Set([...profile.paths, ...paths])], mastery };
+  return { ...profile, achievements, unlockedItems, unlockedPassives, paths: [...new Set([...profile.paths, ...paths])] };
 }
 
 export function startCombat(run: RunState, enemyIds: string[]): CombatState {

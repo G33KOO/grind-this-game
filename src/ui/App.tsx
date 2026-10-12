@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Phaser from 'phaser';
-import { ACHIEVEMENTS, BALANCE, ENEMIES, HEROES, ITEMS, PASSIVES, ZONES } from '../game/content';
+import { ACHIEVEMENTS, BALANCE, ENEMIES, HEROES, ITEMS, PASSIVES, ZONES, masteryLevelsForRank, masteryRank, MASTERY_MAX_RANK } from '../game/content';
 import {
-  addAchievements, advanceEncounter, allocatePoints, choosePassive, deriveStats,
+  addAchievements, advanceEncounter, allocatePoints, applyProgress, choosePassive, deriveStats,
   equipItem, gainExperience, initialProfile, itemForInstance, newRun, passiveChoices, rollEncounter,
   respecStats, rollLoot, slotForItem, startCombat, stepCombat, useConsumable,
 } from '../game/engine';
@@ -267,11 +267,23 @@ export function App() {
         const loot = rollLoot(updated, enemy.id, profileRef.current);
         updated = loot.run;
       }
-      profileAfter = addAchievements(profileAfter, updated);
+      const progress = applyProgress(profileAfter, updated);
+      profileAfter = progress.profile;
+      updated = progress.run;
     } else {
       updated = { ...updated, hp: 0, result: 'death' };
-      profileAfter = addAchievements(profileAfter, updated);
+      const progress = applyProgress(profileAfter, updated);
+      profileAfter = progress.profile;
+      updated = progress.run;
     }
+    const newAchievements = profileAfter.achievements.filter((id) => !profileRef.current.achievements.includes(id))
+      .map((id) => ACHIEVEMENTS.find((entry) => entry.id === id)?.name).filter(Boolean);
+    const rankBefore = masteryRank(profileRef.current.mastery[updated.hero]);
+    const rankAfter = masteryRank(profileAfter.mastery[updated.hero]);
+    const progressNotice = [
+      ...(rankAfter > rankBefore ? [`Maîtrise ${HEROES[updated.hero].name} niveau ${rankAfter} !`] : []),
+      ...(newAchievements.length ? [`Succès : ${newAchievements.join(', ')}`] : []),
+    ].join(' · ');
     try {
       await saveRun(updated);
     } catch (saveError) {
@@ -295,7 +307,7 @@ export function App() {
     } else {
       setScreen('world');
       sceneRef.current?.togglePause(false);
-      setNotice(result.over === 'win' ? `Combat gagné : ${defeated.length} ennemi(s), ${defeated.reduce((sum, enemy) => sum + enemy.xp, 0)} XP.` : 'La partie est terminée.');
+      setNotice([result.over === 'win' ? `Combat gagné : ${defeated.length} ennemi(s), ${defeated.reduce((sum, enemy) => sum + enemy.xp, 0)} XP.` : 'La partie est terminée.', progressNotice].filter(Boolean).join(' — '));
     }
   }, [syncCombat, syncRun, updateProfile]);
 
@@ -505,12 +517,14 @@ export function App() {
         {run.unspentPoints > 0 && <div className="points-panel"><strong>{run.unspentPoints} points à répartir</strong>{(['strength', 'speed', 'luck', 'defense', 'maxHp'] as const).map((stat) => <div className="point-row" key={stat}><span>{statLabel(stat)}</span>{Array.from(new Set([1, 5, run.unspentPoints])).map((amount) => <button key={amount} onClick={() => pickStat(stat, amount)}>{amount === run.unspentPoints ? 'Tout' : `+${amount}`}</button>)}</div>)}
           {Object.values(run.invested).some((value) => (value ?? 0) > 0) && <button className="respec-button" onClick={() => persistRun(respecStats(run))}>Réinitialiser les points (gratuit)</button>}
         </div>}
-        <p className="small-note">Maîtrise {profile.mastery[run.hero]} · Réattribution des statistiques gratuite dans ce prototype.</p>
+        <MasteryPanel hero={run.hero} levels={profile.mastery[run.hero]} />
+        <p className="small-note">Réattribution des statistiques gratuite dans ce prototype.</p>
         <div className="passive-list">{run.passives.map((passive) => {
           const definition = PASSIVES.find((entry) => entry.id === passive.id);
           const rarity = passiveRarity(definition?.weight ?? 5);
           return <span key={passive.id} className={`rarity-${rarity}`} style={{ color: RARITIES[rarity].color, borderLeft: `3px solid ${RARITIES[rarity].color}` }}><ItemIcon id={passive.id} rarity={rarity} size={26} />{definition?.name} · rang {passive.rank}</span>;
-        })}</div></>}
+        })}</div>
+        <AchievementList profile={profile} hero={run.hero} /></>}
     </section>}
 
     {screen === 'settings' && <section className="panel modal-panel">
@@ -544,6 +558,36 @@ function newRunFor(hero: HeroId, developer: boolean): RunState {
     run = { ...run, developerMode: true, level: 8, xp: 0, xpToNext: 228, unspentPoints: 14 };
   }
   return run;
+}
+
+function MasteryPanel({ hero, levels }: { hero: HeroId; levels: number }) {
+  const rank = masteryRank(levels);
+  const floor = rank === 0 ? 0 : masteryLevelsForRank(rank);
+  const next = rank >= MASTERY_MAX_RANK ? floor : masteryLevelsForRank(rank + 1);
+  const ratio = next === floor ? 1 : (levels - floor) / (next - floor);
+  const rewards = PASSIVES.filter((passive) => passive.hero === hero && passive.masteryRequired !== undefined)
+    .sort((a, b) => (a.masteryRequired ?? 0) - (b.masteryRequired ?? 0));
+  return <div className="mastery-panel">
+    <div className="mastery-head"><strong>Maîtrise {HEROES[hero].name} · niveau {rank}</strong><span>{levels} niveaux gagnés{rank < MASTERY_MAX_RANK ? ` · prochain palier : ${next}` : ' · maximum'}</span></div>
+    <div className="mastery-track"><i style={{ width: `${Math.round(ratio * 100)}%` }} /></div>
+    <ul className="mastery-rewards">{rewards.map((passive) => <li key={passive.id} className={rank >= (passive.masteryRequired ?? 0) ? 'reached' : ''}>
+      <b>Maîtrise {passive.masteryRequired}</b> · passif « {passive.name} »</li>)}</ul>
+  </div>;
+}
+
+function AchievementList({ profile, hero }: { profile: Profile; hero: HeroId }) {
+  const visible = ACHIEVEMENTS.filter((entry) => !entry.hero || entry.hero === hero);
+  return <div className="achievement-list">
+    <h3>Succès · {visible.filter((entry) => profile.achievements.includes(entry.id)).length}/{visible.length}</h3>
+    {visible.map((entry) => {
+      const done = profile.achievements.includes(entry.id);
+      const rewards = (entry.unlocks ?? []).map((id) => ITEMS.find((item) => item.id === id)?.name ?? PASSIVES.find((passive) => passive.id === id)?.name).filter(Boolean).join(', ');
+      return <div key={entry.id} className={`achievement${done ? ' done' : ''}`}>
+        <strong>{done ? '✔' : '○'} {entry.name}</strong><span>{entry.description}</span>
+        {rewards && <small>Récompense : {rewards}</small>}
+      </div>;
+    })}
+  </div>;
 }
 
 function PanelHeading({ label, title, onClose }: { label: string; title: string; onClose: () => void }) {

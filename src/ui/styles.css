@@ -255,3 +255,19 @@ kbd { font: 10px "DM Mono", monospace; color: var(--muted); border: 1px solid #5
 .passive-card { align-items: flex-start; border: 1px solid var(--rarity-line, #34444a); box-shadow: 0 0 14px color-mix(in srgb, var(--rarity-line, transparent) 25%, transparent); }
 .passive-card strong { color: #fff; }
 .passive-list span { display: inline-flex; align-items: center; gap: 6px; }
+
+/* Maîtrise et succès */
+.mastery-panel { margin: 12px 0; padding: 12px 14px; border: 1px solid #2ee6c866; border-radius: 12px; background: #2ee6c80d; }
+.mastery-head { display: flex; justify-content: space-between; gap: 10px; flex-wrap: wrap; font-size: 13px; }
+.mastery-head span { color: #9fb4b8; font-size: 12px; }
+.mastery-track { height: 8px; margin: 8px 0; border-radius: 99px; background: #0a1418; overflow: hidden; }
+.mastery-track i { display: block; height: 100%; background: linear-gradient(90deg, #2ee6c8, #bffcf2); box-shadow: 0 0 10px #2ee6c8; }
+.mastery-rewards { list-style: none; margin: 0; padding: 0; display: grid; gap: 3px; font-size: 12px; color: #6f8388; }
+.mastery-rewards li.reached { color: #bffcf2; }
+.achievement-list { margin-top: 14px; display: grid; gap: 6px; }
+.achievement-list h3 { margin: 0 0 4px; }
+.achievement { display: grid; gap: 2px; padding: 8px 10px; border: 1px solid #34444a; border-radius: 10px; font-size: 12px; color: #8a9ca0; }
+.achievement strong { font-size: 13px; }
+.achievement small { color: #ffa733; }
+.achievement.done { border-color: #5fd16f; color: #d4e6d8; box-shadow: inset 3px 0 0 #5fd16f; }
+.achievement.done strong { color: #5fd16f; }

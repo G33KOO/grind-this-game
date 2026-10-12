@@ -29,8 +29,25 @@ export interface ItemDefinition {
   stats?: Partial<Stats>;
   effects?: Effect[];
   heal?: number;
-  rarity: 'common' | 'rare' | 'epic';
+  rarity: 'common' | 'uncommon' | 'rare' | 'epic' | 'legendary';
   unlockAchievement?: string;
+}
+
+export type AchievementCondition =
+  | { kind: 'kills'; value: number }
+  | { kind: 'level'; value: number }
+  | { kind: 'boss'; value: string }
+  | { kind: 'secrets'; value: number }
+  | { kind: 'masteryRank'; value: number };
+
+export interface AchievementDefinition {
+  id: string;
+  name: string;
+  description: string;
+  hero?: HeroId;
+  condition: AchievementCondition;
+  unlocks?: string[];
+  path?: string;
 }
 
 export interface PassiveDefinition {
@@ -99,6 +116,7 @@ export interface RunState {
   secrets: string[];
   usedShrines: string[];
   explored?: string;
+  masteryBanked?: number;
   kills: number;
   victories: number;
   result: 'active' | 'victory' | 'death';

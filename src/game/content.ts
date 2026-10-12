@@ -1,4 +1,4 @@
-import type { EnemyDefinition, HeroId, ItemDefinition, PassiveDefinition, Stats } from './types';
+import type { AchievementDefinition, EnemyDefinition, HeroId, ItemDefinition, PassiveDefinition, Stats } from './types';
 
 export const BALANCE = {
   encounterCheckDistance: 96,
@@ -47,6 +47,15 @@ export const ITEMS: ItemDefinition[] = [
   { id: 'vampire-seal', name: 'Sceau vampire', slot: 'charm', description: 'Vol de vie 12 %', effects: [{ kind: 'lifesteal', ratio: 0.12 }], rarity: 'epic', unlockAchievement: 'first-boss' },
   { id: 'small-potion', name: 'Potion mineure', slot: 'consumable', description: 'Rend 35 PV', heal: 35, rarity: 'common' },
   { id: 'greater-potion', name: 'Potion forte', slot: 'consumable', description: 'Rend 80 PV', heal: 80, rarity: 'rare' },
+  { id: 'slime-core', name: 'Noyau gélatineux', slot: 'charm', description: '+25 PV maximum, +1 défense', stats: { maxHp: 25, defense: 1 }, rarity: 'uncommon', unlockAchievement: 'meadow-slain' },
+  { id: 'hunter-totem', name: 'Totem du chasseur', slot: 'charm', description: '+3 force, +6 chance', stats: { strength: 3, luck: 6 }, rarity: 'rare', unlockAchievement: 'twenty-five-kills' },
+  { id: 'alpha-fang', name: 'Croc de l’alpha', slot: 'weapon', description: '+4 force, +0,15 vitesse', stats: { strength: 4, speed: 0.15 }, rarity: 'rare', unlockAchievement: 'forest-slain' },
+  { id: 'mist-cloak', name: 'Voile de brume', slot: 'armor', description: '+5 défense, +0,08 vitesse', stats: { defense: 5, speed: 0.08 }, rarity: 'rare', unlockAchievement: 'marsh-slain' },
+  { id: 'grave-blade', name: 'Lame du tombeau', slot: 'weapon', description: '+8 force, poison tenace', stats: { strength: 8 }, effects: [{ kind: 'poison', damage: 4, turns: 3 }], rarity: 'epic', unlockAchievement: 'crypt-slain' },
+  { id: 'star-shard', name: 'Éclat d’étoile', slot: 'charm', description: '+8 chance, +5 % critique', stats: { luck: 8, critChance: 0.05 }, rarity: 'epic', unlockAchievement: 'explorer' },
+  { id: 'veteran-plate', name: 'Plastron du vétéran', slot: 'armor', description: '+6 défense, +20 PV maximum', stats: { defense: 6, maxHp: 20 }, rarity: 'epic', unlockAchievement: 'level-10' },
+  { id: 'war-banner', name: 'Étendard de guerre', slot: 'charm', description: '+4 force, 15 % de dégâts aux autres ennemis', stats: { strength: 4 }, effects: [{ kind: 'cleave', ratio: 0.15 }], rarity: 'legendary', unlockAchievement: 'warrior-mastery-4' },
+  { id: 'night-mantle', name: 'Manteau de nuit', slot: 'armor', description: '+4 défense, +0,2 vitesse, +6 % critique', stats: { defense: 4, speed: 0.2, critChance: 0.06 }, rarity: 'legendary', unlockAchievement: 'assassin-mastery-4' },
 ];
 
 const commonLoot = [{ itemId: 'small-potion', weight: 4 }, { itemId: 'wolf-tooth', weight: 2 }];
@@ -68,19 +77,44 @@ export const ENEMIES: EnemyDefinition[] = [
   { id: 'final-boss', name: 'Gardien du seuil', hp: 240, strength: 16, speed: 0.65, defense: 8, color: 0xe8b34e, xp: 300, loot: [{ itemId: 'wraith-mail', weight: 2 }, { itemId: 'vampire-seal', weight: 2 }] },
 ];
 
+// Objets débloqués par achievements : ils n'entrent dans la table de butin qu'une fois le succès obtenu (voir canDrop).
+const BONUS_LOOT: Record<string, { itemId: string; weight: number }[]> = {
+  slime: [{ itemId: 'slime-core', weight: 1 }],
+  rat: [{ itemId: 'hunter-totem', weight: 1 }],
+  bandit: [{ itemId: 'hunter-totem', weight: 1 }],
+  wolf: [{ itemId: 'alpha-fang', weight: 1 }],
+  wisp: [{ itemId: 'mist-cloak', weight: 1 }, { itemId: 'star-shard', weight: 0.5 }],
+  skeleton: [{ itemId: 'grave-blade', weight: 0.6 }],
+  cultist: [{ itemId: 'grave-blade', weight: 0.6 }, { itemId: 'night-mantle', weight: 0.4 }],
+  golem: [{ itemId: 'veteran-plate', weight: 1 }],
+  knight: [{ itemId: 'veteran-plate', weight: 1 }, { itemId: 'war-banner', weight: 0.5 }],
+  drake: [{ itemId: 'star-shard', weight: 1 }, { itemId: 'war-banner', weight: 0.7 }, { itemId: 'night-mantle', weight: 0.7 }],
+  'meadow-boss': [{ itemId: 'slime-core', weight: 2 }],
+  'forest-boss': [{ itemId: 'alpha-fang', weight: 2 }],
+  'marsh-boss': [{ itemId: 'mist-cloak', weight: 2 }],
+  'crypt-boss': [{ itemId: 'grave-blade', weight: 2 }, { itemId: 'veteran-plate', weight: 1 }],
+};
+for (const enemy of ENEMIES) enemy.loot = [...enemy.loot, ...(BONUS_LOOT[enemy.id] ?? [])];
+
 export const PASSIVES: PassiveDefinition[] = [
   { id: 'iron-skin', name: 'Peau de fer', description: '+2 défense par rang', hero: 'warrior', maxRank: 3, weight: 5, stats: { defense: 2 } },
   { id: 'battle-heart', name: 'Cœur de bataille', description: '+12 PV max par rang', hero: 'warrior', maxRank: 3, weight: 4, stats: { maxHp: 12 } },
   { id: 'shielded', name: 'Garde assurée', description: 'Bouclier initial +8 par rang', hero: 'warrior', maxRank: 3, weight: 3, effects: [{ kind: 'shield', amount: 8 }] },
   { id: 'cleaving-blow', name: 'Frappe circulaire', description: '25 % de dégâts aux autres ennemis', hero: 'warrior', maxRank: 2, weight: 2, effects: [{ kind: 'cleave', ratio: 0.25 }] },
   { id: 'unyielding', name: 'Inébranlable', description: '+15 % dégâts sous 35 % PV', hero: 'warrior', maxRank: 2, weight: 1, effects: [{ kind: 'lowHealthDamage', ratio: 0.15 }] },
-  { id: 'fortress', name: 'Forteresse', description: 'Convertit 20 % défense en force', hero: 'warrior', maxRank: 2, weight: 0.7, masteryRequired: 3, effects: [{ kind: 'defenseDamage', ratio: 0.2 }] },
+  { id: 'fortress', name: 'Forteresse', description: 'Convertit 20 % défense en force', hero: 'warrior', maxRank: 2, weight: 0.7, masteryRequired: 2, effects: [{ kind: 'defenseDamage', ratio: 0.2 }] },
   { id: 'quick-step', name: 'Pas vif', description: '+0,12 vitesse par rang', hero: 'assassin', maxRank: 3, weight: 5, stats: { speed: 0.12 } },
   { id: 'keen-eye', name: 'Œil acéré', description: '+5 % critique par rang', hero: 'assassin', maxRank: 3, weight: 4, stats: { critChance: 0.05 } },
   { id: 'venom', name: 'Venin', description: 'Vos attaques empoisonnent', hero: 'assassin', maxRank: 3, weight: 3, effects: [{ kind: 'poison', damage: 4, turns: 2 }] },
   { id: 'bloodletting', name: 'Saignée', description: 'Vol de vie 8 %', hero: 'assassin', maxRank: 2, weight: 2, effects: [{ kind: 'lifesteal', ratio: 0.08 }] },
   { id: 'double-cut', name: 'Double entaille', description: '25 % dégâts en frappe supplémentaire', hero: 'assassin', maxRank: 2, weight: 1, effects: [{ kind: 'extraStrike', ratio: 0.25 }] },
-  { id: 'phantom', name: 'Danse fantôme', description: '+0,2 vitesse et critique +8 %', hero: 'assassin', maxRank: 2, weight: 0.7, masteryRequired: 10, stats: { speed: 0.2, critChance: 0.08 } },
+  { id: 'phantom', name: 'Danse fantôme', description: '+0,2 vitesse et critique +8 %', hero: 'assassin', maxRank: 2, weight: 0.7, masteryRequired: 3, stats: { speed: 0.2, critChance: 0.08 } },
+  { id: 'war-cry', name: 'Cri de guerre', description: '+3 force par rang', hero: 'warrior', maxRank: 3, weight: 2.5, masteryRequired: 2, stats: { strength: 3 } },
+  { id: 'stone-heart', name: 'Cœur de pierre', description: '+25 PV max par rang', hero: 'warrior', maxRank: 2, weight: 1.5, unlockAchievement: 'warrior-level-10', stats: { maxHp: 25 } },
+  { id: 'living-bastion', name: 'Bastion vivant', description: '+3 défense par rang, 15 % de la défense convertie en force', hero: 'warrior', maxRank: 2, weight: 0.6, masteryRequired: 5, stats: { defense: 3 }, effects: [{ kind: 'defenseDamage', ratio: 0.15 }] },
+  { id: 'deadly-aim', name: 'Visée mortelle', description: 'Dégâts critiques +0,25 par rang', hero: 'assassin', maxRank: 3, weight: 2.5, masteryRequired: 2, stats: { critDamage: 0.25 } },
+  { id: 'lucky-dagger', name: 'Lame chanceuse', description: '+4 chance et +2 % critique par rang', hero: 'assassin', maxRank: 3, weight: 1.5, unlockAchievement: 'assassin-level-10', stats: { luck: 4, critChance: 0.02 } },
+  { id: 'reaper', name: 'Faucheur', description: '+0,1 vitesse, 30 % dégâts en frappe supplémentaire', hero: 'assassin', maxRank: 2, weight: 0.6, masteryRequired: 5, stats: { speed: 0.1 }, effects: [{ kind: 'extraStrike', ratio: 0.3 }] },
 ];
 
 export const ZONES = [
@@ -134,15 +168,41 @@ export const validateContent = (): string[] => {
     if (zone.requires && !ZONES.some((entry) => entry.boss === zone.requires)) errors.push(`${zone.id}: boss requis inconnu ${zone.requires}.`);
   }
   for (const achievement of ACHIEVEMENTS) {
-    if ('unlocks' in achievement) for (const id of achievement.unlocks) {
+    for (const id of achievement.unlocks ?? []) {
       if (!itemIds.has(id) && !passiveIds.has(id)) errors.push(`${achievement.id}: déblocage inconnu ${id}.`);
     }
+    const { condition } = achievement;
+    if (condition.kind === 'boss' && !enemyIds.has(condition.value)) errors.push(`${achievement.id}: boss inconnu ${condition.value}.`);
+    if (condition.kind !== 'boss' && (!Number.isFinite(condition.value) || condition.value <= 0)) errors.push(`${achievement.id}: seuil invalide.`);
+  }
+  for (const item of ITEMS) {
+    if (item.unlockAchievement && !ENEMIES.some((enemy) => enemy.loot.some((drop) => drop.itemId === item.id))) errors.push(`${item.id}: absent de toute table de butin.`);
   }
   return errors;
 };
 
-export const ACHIEVEMENTS = [
-  { id: 'first-kill', name: 'Premier sang', description: 'Vaincre un monstre.' },
-  { id: 'ten-kills', name: 'Chasseur', description: 'Vaincre dix monstres.', unlocks: ['glass-eye', 'phantom'] },
-  { id: 'first-boss', name: 'Briseur de sceau', description: 'Vaincre le Gardien.', unlocks: ['wraith-mail', 'vampire-seal', 'fortress'], path: 'ashen-path' },
-] as const;
+export const ACHIEVEMENTS: AchievementDefinition[] = [
+  { id: 'first-kill', name: 'Premier sang', description: 'Vaincre un monstre.', condition: { kind: 'kills', value: 1 } },
+  { id: 'ten-kills', name: 'Chasseur', description: 'Vaincre dix monstres en une partie.', condition: { kind: 'kills', value: 10 }, unlocks: ['glass-eye', 'phantom'] },
+  { id: 'twenty-five-kills', name: 'Tueur', description: 'Vaincre 25 monstres en une partie.', condition: { kind: 'kills', value: 25 }, unlocks: ['hunter-totem'] },
+  { id: 'meadow-slain', name: 'Reine détrônée', description: 'Vaincre la Reine gélatineuse.', condition: { kind: 'boss', value: 'meadow-boss' }, unlocks: ['slime-core'] },
+  { id: 'forest-slain', name: 'Maître de la meute', description: 'Vaincre l’Alpha des bois.', condition: { kind: 'boss', value: 'forest-boss' }, unlocks: ['alpha-fang'] },
+  { id: 'marsh-slain', name: 'Chasseur de spectres', description: 'Vaincre le Spectre du marais.', condition: { kind: 'boss', value: 'marsh-boss' }, unlocks: ['mist-cloak'] },
+  { id: 'crypt-slain', name: 'Profanateur', description: 'Vaincre le Seigneur de la crypte.', condition: { kind: 'boss', value: 'crypt-boss' }, unlocks: ['grave-blade'] },
+  { id: 'first-boss', name: 'Briseur de sceau', description: 'Vaincre le Gardien.', condition: { kind: 'boss', value: 'final-boss' }, unlocks: ['wraith-mail', 'vampire-seal', 'fortress'], path: 'ashen-path' },
+  { id: 'explorer', name: 'Curieux', description: 'Découvrir les deux secrets.', condition: { kind: 'secrets', value: 2 }, unlocks: ['star-shard'] },
+  { id: 'level-10', name: 'Vétéran', description: 'Atteindre le niveau 10.', condition: { kind: 'level', value: 10 }, unlocks: ['veteran-plate'] },
+  { id: 'warrior-level-10', name: 'Rempart vivant', description: 'Atteindre le niveau 10 avec le Guerrier.', hero: 'warrior', condition: { kind: 'level', value: 10 }, unlocks: ['stone-heart'] },
+  { id: 'assassin-level-10', name: 'Lame chanceuse', description: 'Atteindre le niveau 10 avec l’Assassin.', hero: 'assassin', condition: { kind: 'level', value: 10 }, unlocks: ['lucky-dagger'] },
+  { id: 'warrior-mastery-4', name: 'Maître d’armes', description: 'Atteindre la maîtrise 4 du Guerrier.', hero: 'warrior', condition: { kind: 'masteryRank', value: 4 }, unlocks: ['war-banner'] },
+  { id: 'assassin-mastery-4', name: 'Maître de l’ombre', description: 'Atteindre la maîtrise 4 de l’Assassin.', hero: 'assassin', condition: { kind: 'masteryRank', value: 4 }, unlocks: ['night-mantle'] },
+];
+
+/** Maîtrise : niveaux gagnés cumulés sur une classe. Le rang n demande 2·n·(n+1) niveaux. */
+export const MASTERY_MAX_RANK = 10;
+export const masteryLevelsForRank = (rank: number): number => 2 * rank * (rank + 1);
+export function masteryRank(levels: number): number {
+  let rank = 0;
+  while (rank < MASTERY_MAX_RANK && levels >= masteryLevelsForRank(rank + 1)) rank++;
+  return rank;
+}
