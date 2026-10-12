@@ -64,3 +64,5 @@ export function ItemIcon({ id, rarity, size = 44, className = '' }: { id: string
     </span>
   );
 }
+
+export const passiveRarity = (weight: number): Rarity => weight >= 4 ? 'common' : weight >= 3 ? 'uncommon' : weight >= 2 ? 'rare' : weight >= 1 ? 'epic' : 'legendary';

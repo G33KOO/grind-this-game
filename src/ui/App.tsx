@@ -3,9 +3,10 @@ import Phaser from 'phaser';
 import { ACHIEVEMENTS, BALANCE, ENEMIES, HEROES, ITEMS, PASSIVES, ZONES, masteryLevelsForRank, masteryRank, MASTERY_MAX_RANK } from '../game/content';
 import {
   addAchievements, advanceEncounter, allocatePoints, applyProgress, choosePassive, deriveStats,
-  equipItem, gainExperience, initialProfile, itemForInstance, newRun, passiveChoices, rollEncounter,
+  equipItem, gainExperience, initialProfile, itemForInstance, newRun, passiveChoices, resolveLoadout, rollEncounter,
   respecStats, rollLoot, slotForItem, startCombat, stepCombat, useConsumable,
 } from '../game/engine';
+import type { Loadout } from '../game/engine';
 import { DEFAULT_SETTINGS, loadProfile, loadRun, loadSettings, saveProfile, saveRun, saveSettings, type Settings } from '../game/save';
 import { SettingsBody } from './SettingsBody';
 import { NeonLogo } from './NeonLogo';
@@ -13,9 +14,10 @@ import { PlatformScene, type MapCallbacks, type MapEvent } from '../game/Platfor
 import { ZONE_SHAPES, zoneAt } from '../game/world';
 import { BattleScene } from './BattleScene';
 import { CombatRecap, type CombatRecapData } from './CombatRecap';
-import { ItemIcon, RARITIES, type Rarity } from './icons';
+import { ItemIcon, RARITIES, passiveRarity, type Rarity } from './icons';
+import { LoadoutPage } from './LoadoutPage';
 
-const passiveRarity = (weight: number): Rarity => weight >= 4 ? 'common' : weight >= 3 ? 'uncommon' : weight >= 2 ? 'rare' : weight >= 1 ? 'epic' : 'legendary';
+
 import type { CombatState, HeroId, Profile, RunState } from '../game/types';
 
 type Screen = 'title' | 'world' | 'combat' | 'inventory' | 'stats' | 'settings' | 'achievements' | 'summary';
@@ -32,6 +34,8 @@ export function App() {
   const [newRunSelection, setNewRunSelection] = useState(false);
   const [titlePanel, setTitlePanel] = useState<'settings' | 'achievements' | null>(null);
   const [heroDetail, setHeroDetail] = useState<HeroId | null>(null);
+  const [loadoutHero, setLoadoutHero] = useState<HeroId | null>(null);
+  const [worldReady, setWorldReady] = useState(false);
   const [combat, setCombat] = useState<CombatState | null>(null);
   const combatRef = useRef<CombatState | null>(null);
   const [settings, setSettings] = useState<Settings>(() => loadSettings());
@@ -153,16 +157,6 @@ export function App() {
     } else if (event.startsWith('boss:')) {
       const bossId = event.slice(5);
       if (!current.defeatedBosses.includes(bossId)) launchCombat([bossId]);
-    } else if (event === 'shrine') {
-      if (current.usedShrines.includes('meadow-shrine')) {
-        setNotice('Le sanctuaire a déjà été utilisé pendant cette partie.');
-      } else {
-        const healed = Math.min(deriveStats(current).maxHp, current.hp + 45);
-        const updated = { ...current, hp: healed, usedShrines: [...current.usedShrines, 'meadow-shrine'] };
-        syncRun(updated);
-        void saveRun(updated).catch((saveError: unknown) => setError(saveError instanceof Error ? saveError.message : 'Échec de sauvegarde.'));
-        setNotice(`Sanctuaire : +${healed - current.hp} PV (une fois par partie).`);
-      }
     } else {
       const secret = event === 'secret-one' ? 'hidden-cache-one' : 'hidden-cache-two';
       if (current.secrets.includes(secret)) return;
@@ -200,6 +194,7 @@ export function App() {
         sceneRef.current = scene;
         const { up, down, left, right } = settingsRef.current.bindings;
         scene.setMoveKeys({ up, down, left, right });
+        window.requestAnimationFrame(() => setWorldReady(true));
       },
       travel: (pending) => {
         const bar = encounterBarRef.current;
@@ -212,20 +207,26 @@ export function App() {
         (bossId === 'crypt-boss' && profileRef.current.paths.includes('ashen-path')),
     };
     const worldScene = new PlatformScene(callbacks, run.position, HEROES[run.hero].color);
-    const game = new Phaser.Game({
-      type: Phaser.CANVAS,
-      parent: 'game-canvas',
-      width: 960,
-      height: 620,
-      backgroundColor: '#243b34',
-      scale: { mode: Phaser.Scale.RESIZE, autoCenter: Phaser.Scale.CENTER_BOTH },
-      physics: { default: 'arcade', arcade: { debug: false } },
-      input: { gamepad: true },
-      scene: [worldScene],
-    });
-    gameRef.current = game;
+    let game: Phaser.Game | null = null;
+    setWorldReady(false);
+    // Laisse l'écran de chargement s'afficher avant la construction (synchrone) du monde
+    const timer = window.setTimeout(() => {
+      game = new Phaser.Game({
+        type: Phaser.CANVAS,
+        parent: 'game-canvas',
+        width: 960,
+        height: 620,
+        backgroundColor: '#243b34',
+        scale: { mode: Phaser.Scale.RESIZE, autoCenter: Phaser.Scale.CENTER_BOTH },
+        physics: { default: 'arcade', arcade: { debug: false } },
+        input: { gamepad: true },
+        scene: [worldScene],
+      });
+      gameRef.current = game;
+    }, 80);
     return () => {
-      game.destroy(true);
+      window.clearTimeout(timer);
+      game?.destroy(true);
       gameRef.current = null;
       sceneRef.current = null;
     };
@@ -391,8 +392,9 @@ export function App() {
     return () => window.clearInterval(timer);
   }, []);
 
-  const startGame = (hero: HeroId) => {
-    const fresh = newRunFor(hero, developmentMode);
+  const startGame = (hero: HeroId, loadout: Required<Loadout>) => {
+    const fresh = newRunFor(hero, developmentMode, resolveLoadout(hero, profile, loadout));
+    setLoadoutHero(null);
     syncRun(fresh);
     syncCombat(null);
     setNotice('');
@@ -437,6 +439,49 @@ export function App() {
     void saveRun(null).catch((saveError: unknown) => setError(saveError instanceof Error ? saveError.message : 'Échec de sauvegarde.'));
   };
 
+  if ((!run || screen === 'title') && loadoutHero) {
+    return <LoadoutPage hero={loadoutHero} profile={profile} onStart={(loadout) => startGame(loadoutHero, loadout)} onBack={() => setLoadoutHero(null)} />;
+  }
+
+  if ((!run || screen === 'title') && heroDetail) {
+    return <main className="shell title-screen classes-page">
+      <div className="title-grid" aria-hidden="true" />
+      <header className="classes-head">
+        <button onClick={() => setHeroDetail(null)}>← Retour</button>
+        <h2>Classes</h2>
+      </header>
+      <div className="classes-layout">
+        <nav className="classes-list" aria-label="Liste des classes">
+          {(['warrior', 'assassin'] as const).map((hero) => {
+            const rank = masteryRank(profile.mastery[hero] ?? 0);
+            return <button key={hero} className={`class-chip ${hero === heroDetail ? 'is-selected' : ''}`} aria-pressed={hero === heroDetail} style={{ ['--accent' as string]: hero === 'warrior' ? '#2ee6c8' : '#ff8a4d' }} onClick={() => setHeroDetail(hero)}>
+              <span className="hero-icon">{hero === 'warrior' ? '◆' : '◇'}</span>
+              <span className="chip-body"><strong>{HEROES[hero].name}</strong><small>Maîtrise {rank}/{MASTERY_MAX_RANK}</small></span>
+            </button>;
+          })}
+        </nav>
+        <section className="panel classes-detail" style={{ ['--accent' as string]: heroDetail === 'warrior' ? '#2ee6c8' : '#ff8a4d' }}>
+          <PanelHeading label="CLASSE" title={HEROES[heroDetail].name} />
+          <ClassDetails hero={heroDetail} profile={profile} />
+        </section>
+      </div>
+    </main>;
+  }
+
+  if ((!run || screen === 'title') && titlePanel) {
+    const isSettings = titlePanel === 'settings';
+    return <main className="shell title-screen classes-page">
+      <div className="title-grid" aria-hidden="true" />
+      <header className="classes-head">
+        <button onClick={() => setTitlePanel(null)}>← Retour</button>
+        <h2>{isSettings ? 'Paramètres' : 'Succès'}</h2>
+      </header>
+      <section className="panel page-panel">
+        {isSettings ? <SettingsBody settings={settings} setSettings={setSettings} /> : <AchievementList profile={profile} />}
+      </section>
+    </main>;
+  }
+
   if (!run || screen === 'title') {
     return <main className="shell title-screen">
       <div className="title-grid" aria-hidden="true" />
@@ -449,7 +494,7 @@ export function App() {
         <button className="danger" onClick={abandonRun}>Abandonner la partie</button>
       </>}
       {(!run || run.result !== 'active' || newRunSelection) && <div className="hero-picks">
-        {(['warrior', 'assassin'] as const).map((hero) => <button key={hero} className="hero-card" style={{ ['--accent' as string]: hero === 'warrior' ? '#2ee6c8' : '#ff8a4d' }} onClick={() => startGame(hero)}>
+        {(['warrior', 'assassin'] as const).map((hero) => <button key={hero} className="hero-card" style={{ ['--accent' as string]: hero === 'warrior' ? '#2ee6c8' : '#ff8a4d' }} onClick={() => setLoadoutHero(hero)}>
           <span className="hero-icon">{hero === 'warrior' ? '◆' : '◇'}</span>
           <strong>{HEROES[hero].name}</strong>
           <span>{hero === 'warrior' ? 'Défense, boucliers et endurance.' : 'Vitesse, critiques et poison.'}</span>
@@ -478,14 +523,6 @@ export function App() {
         <button onClick={() => setTitlePanel('settings')}>Paramètres</button>
         <button onClick={() => window.close()}>Quitter</button>
       </div>
-      {titlePanel && <div className="title-overlay"><section className="panel modal-panel">
-        <PanelHeading label={titlePanel === 'settings' ? 'PRÉFÉRENCES' : 'PROGRESSION PERMANENTE'} title={titlePanel === 'settings' ? 'Paramètres' : 'Succès'} onClose={() => setTitlePanel(null)} />
-        {titlePanel === 'settings' ? <SettingsBody settings={settings} setSettings={setSettings} /> : <AchievementList profile={profile} />}
-      </section></div>}
-      {heroDetail && <div className="title-overlay"><section className="panel modal-panel">
-        <PanelHeading label="CLASSE" title={HEROES[heroDetail].name} onClose={() => setHeroDetail(null)} />
-        <ClassDetails hero={heroDetail} profile={profile} />
-      </section></div>}
     </main>;
   }
 
@@ -515,6 +552,12 @@ export function App() {
     </header>
     <section className={`stage ${screen === 'summary' ? 'stage-hidden' : ''}`} aria-label="Carte du monde">
       <div id="game-canvas" />
+      {!worldReady && <div className="loading-screen" role="status" aria-live="polite">
+        <div className="title-grid" aria-hidden="true" />
+        <NeonLogo size={72} />
+        <p>Chargement du monde</p>
+        <div className="loading-bar" aria-hidden="true"><i /></div>
+      </div>}
       {screen !== 'world' && <div className="stage-veil" />}
       <div className="world-location" aria-label="Zone actuelle">{zoneAt(run.position.x, run.position.y).name}</div>
       <div className="encounter-bar" role="progressbar" aria-label="Danger de rencontre"><span>DANGER</span><div className="encounter-track"><i ref={encounterBarRef} /></div></div>
@@ -625,9 +668,9 @@ export function App() {
   </main>;
 }
 
-function newRunFor(hero: HeroId, developer: boolean): RunState {
+function newRunFor(hero: HeroId, developer: boolean, loadout: Required<Loadout>): RunState {
   const seed = crypto.getRandomValues(new Uint32Array(1))[0];
-  let run = newRun(hero, seed);
+  let run = newRun(hero, seed, loadout);
   if (developer) {
     run = { ...run, developerMode: true, level: 8, xp: 0, xpToNext: 228, unspentPoints: 14 };
   }
@@ -721,8 +764,8 @@ function AchievementList({ profile }: { profile: Profile }) {
   </div>;
 }
 
-function PanelHeading({ label, title, onClose }: { label: string; title: string; onClose: () => void }) {
-  return <div className="panel-heading"><div><p className="eyebrow">{label}</p><h2>{title}</h2></div><button onClick={onClose}>Fermer <kbd>Échap</kbd></button></div>;
+function PanelHeading({ label, title, onClose }: { label: string; title: string; onClose?: () => void }) {
+  return <div className="panel-heading"><div><p className="eyebrow">{label}</p><h2>{title}</h2></div>{onClose && <button onClick={onClose}>Fermer <kbd>Échap</kbd></button>}</div>;
 }
 
 function statLabel(key: string): string {

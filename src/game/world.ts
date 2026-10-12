@@ -6,7 +6,6 @@ export type ZoneDefinition = typeof ZONES[number];
 export const WORLD_WIDTH = 2400;
 export const WORLD_HEIGHT = 1750;
 export const WORLD_START = { x: 360, y: 520 };
-export const SHRINE_POSITION = { x: 470, y: 650 };
 export const SECRET_POSITIONS = {
   'secret-one': { x: 1090, y: 340 },
   'secret-two': { x: 1880, y: 1420 },
@@ -123,7 +122,7 @@ function seededRandom(seed: number): () => number {
 
 export function generateDecor(): Decor[] {
   const random = seededRandom(0x51eed5);
-  const reserved = [WORLD_START, SHRINE_POSITION, ...Object.values(BOSS_POSITIONS), ...Object.values(SECRET_POSITIONS), ...Object.values(ZONE_SHAPES)];
+  const reserved =   [WORLD_START, ...Object.values(BOSS_POSITIONS), ...Object.values(SECRET_POSITIONS), ...Object.values(ZONE_SHAPES)];
   const placed: Decor[] = [];
   const buckets = new Map<string, Decor[]>();
   const bucketKey = (x: number, y: number) => `${Math.floor(x / 120)},${Math.floor(y / 120)}`;

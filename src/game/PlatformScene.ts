@@ -1,11 +1,11 @@
 ﻿import Phaser from 'phaser';
 import { BALANCE, ZONES } from './content';
 import {
-  BOSS_BLOCK_RADIUS, BOSS_POSITIONS, SECRET_POSITIONS, SHRINE_POSITION, WORLD_HEIGHT, WORLD_START, WORLD_WIDTH, clearance, generateDecor, isWalkable, noise, zoneScores,
+  BOSS_BLOCK_RADIUS, BOSS_POSITIONS, SECRET_POSITIONS, WORLD_HEIGHT, WORLD_START, WORLD_WIDTH, clearance, generateDecor, isWalkable, noise, zoneScores,
   type Decor,
 } from './world';
 
-export type MapEvent = 'encounter' | 'shrine' | 'secret-one' | 'secret-two' | `boss:${string}`;
+export type MapEvent = 'encounter' | 'secret-one' | 'secret-two' | `boss:${string}`;
 export interface MapCallbacks {
   moved(x: number, y: number, distance: number): void;
   event(event: MapEvent): void;
@@ -38,7 +38,6 @@ export class PlatformScene extends Phaser.Scene {
   private traveled = 0;
   private lastX = 0;
   private lastY = 0;
-  private shrineReady = true;
   private seenSecrets = new Set<string>();
   private lastDevice: 'keyboard' | 'gamepad' = 'keyboard';
 
@@ -88,8 +87,7 @@ export class PlatformScene extends Phaser.Scene {
       const gap = Math.abs(second.score - first.score);
       if (gap < 7) color = this.blend(color, this.blend(neon, neonOf(second.zone.id), 0.5), (1 - gap / 7) * 0.85);
       else if (gap < 38) color = this.blend(color, neon, ((38 - gap) / 38) * 0.1);
-      if (depth < 1.6) color = this.blend(color, neon, 1 - depth / 1.6 * 0.3);
-      else if (depth < 14) color = this.blend(color, neon, ((14 - depth) / 14) * 0.35);
+      if (depth < 14) color = this.blend(color, neon, ((14 - depth) / 14) * 0.35);
       context.fillStyle = css(color);
       context.fillRect(column, row, 1, 1);
     }
@@ -119,13 +117,6 @@ export class PlatformScene extends Phaser.Scene {
       const passes = solid ? [[5, 0.06], [2.4, 0.16], [1.1, 1]] : [[1, k]];
       for (const [width, alpha] of passes) { graphics.lineStyle(width, color, alpha); draw(); }
     };
-    if (solid) {
-      const ratio = SOLID_KINDS[decor.kind]!;
-      const cy = y + (decor.kind === 'tree' ? s * 0.2 : 0);
-      const radius = Math.max(5, s * ratio);
-      graphics.fillStyle(accent, 0.14).fillCircle(x, cy, radius);
-      graphics.lineStyle(1, accent, 0.8).strokeCircle(x, cy, radius);
-    }
     const poly = (points: { x: number; y: number }[], color: number, fill = 0.9) => {
       graphics.fillStyle(VOID, solid ? fill : 0.3).fillPoints(points, true);
       glow(color, () => graphics.strokePoints(points, true));
@@ -220,10 +211,83 @@ export class PlatformScene extends Phaser.Scene {
     }
   }
 
+  private contourLoops(step = 4): { x: number; y: number }[][] {
+    const columns = Math.ceil(WORLD_WIDTH / step) + 1;
+    const rows = Math.ceil(WORLD_HEIGHT / step) + 1;
+    const values = new Float32Array(columns * rows);
+    for (let row = 0; row < rows; row++) for (let column = 0; column < columns; column++) values[row * columns + column] = clearance(column * step, row * step);
+    const points = new Map<number, { x: number; y: number }>();
+    const links = new Map<number, number[]>();
+    // Un point de croisement est identifié par son arête : 2 * index du coin + (0 horizontale, 1 verticale)
+    const crossing = (column: number, row: number, vertical: boolean): number | null => {
+      const from = values[row * columns + column];
+      const to = vertical ? values[(row + 1) * columns + column] : values[row * columns + column + 1];
+      if ((from > 0) === (to > 0)) return null;
+      const id = (row * columns + column) * 2 + (vertical ? 1 : 0);
+      if (!points.has(id)) {
+        const t = from / (from - to);
+        points.set(id, vertical ? { x: column * step, y: (row + t) * step } : { x: (column + t) * step, y: row * step });
+      }
+      return id;
+    };
+    const link = (a: number, b: number) => {
+      links.set(a, [...(links.get(a) ?? []), b]);
+      links.set(b, [...(links.get(b) ?? []), a]);
+    };
+    for (let row = 0; row < rows - 1; row++) for (let column = 0; column < columns - 1; column++) {
+      const top = crossing(column, row, false);
+      const bottom = crossing(column, row + 1, false);
+      const left = crossing(column, row, true);
+      const right = crossing(column + 1, row, true);
+      const hit = [top, right, bottom, left].filter((id): id is number => id !== null);
+      if (hit.length === 2) link(hit[0], hit[1]);
+      else if (hit.length === 4) { link(top!, left!); link(right!, bottom!); }
+    }
+    const visited = new Set<number>();
+    const loops: { x: number; y: number }[][] = [];
+    for (const start of links.keys()) {
+      if (visited.has(start)) continue;
+      const loop: { x: number; y: number }[] = [];
+      let previous = -1;
+      let current: number | undefined = start;
+      while (current !== undefined && !visited.has(current)) {
+        visited.add(current);
+        loop.push(points.get(current)!);
+        const next: number | undefined = links.get(current)!.find((candidate) => candidate !== previous && !visited.has(candidate));
+        previous = current;
+        current = next;
+      }
+      if (loop.length > 2) loops.push(loop);
+    }
+    return loops;
+  }
+
+  private drawContour(graphics: Phaser.GameObjects.Graphics): void {
+    for (const loop of this.contourLoops()) {
+      const zoneOf = (point: { x: number; y: number }) => zoneScores(point.x, point.y)[0].zone.id;
+      let run = [loop[0]];
+      let zone = zoneOf(loop[0]);
+      const flush = (closing: { x: number; y: number }) => {
+        const path = [...run, closing];
+        for (const [width, alpha] of [[7, 0.06], [3.2, 0.18], [1.4, 1]]) graphics.lineStyle(width, neonOf(zone), alpha).strokePoints(path, false);
+      };
+      for (let index = 1; index <= loop.length; index++) {
+        const point = loop[index % loop.length];
+        const pointZone = zoneOf(point);
+        if (pointZone !== zone || index === loop.length) {
+          flush(point);
+          run = [point];
+          zone = pointZone;
+        } else run.push(point);
+      }
+    }
+  }
+
   private buildWorld(): void {
     this.paintGround();
     const decor = generateDecor();
     const graphics = this.make.graphics({ x: 0, y: 0 }, false);
+    this.drawContour(graphics);
     decor.sort((a, b) => Number(!!SOLID_KINDS[a.kind]) - Number(!!SOLID_KINDS[b.kind]) || a.y - b.y);
     for (const entry of decor) this.drawDecor(graphics, entry);
     const layer = this.add.renderTexture(0, 0, WORLD_WIDTH * 2, WORLD_HEIGHT * 2).setOrigin(0).setScale(0.5).setDepth(1);
@@ -264,13 +328,6 @@ export class PlatformScene extends Phaser.Scene {
     this.physics.world.setBounds(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
     this.bosses = [];
     this.buildWorld();
-    this.add.circle(SHRINE_POSITION.x, SHRINE_POSITION.y, 44, 0x2ee6c8, 0.07).setDepth(2);
-    const shrineRing = this.add.graphics().setDepth(2);
-    this.neonRing(shrineRing, SHRINE_POSITION.x, SHRINE_POSITION.y, 18, 0x2ee6c8);
-    this.neonRing(shrineRing, SHRINE_POSITION.x, SHRINE_POSITION.y, 8, 0xbffcf2);
-    for (const position of Object.values(SECRET_POSITIONS)) {
-      this.neonRing(this.add.graphics().setDepth(2), position.x, position.y, 9, 0xffe27a);
-    }
     for (const zone of ZONES) {
       const position = BOSS_POSITIONS[zone.boss];
       const body = this.add.zone(position.x, position.y, BOSS_BLOCK_RADIUS * 2, BOSS_BLOCK_RADIUS * 2).setDepth(2);
@@ -366,10 +423,6 @@ export class PlatformScene extends Phaser.Scene {
     if (_time - this.lastReport > 250) {
       this.lastReport = _time;
       this.callbacks.moved(this.player.x, this.player.y, 0);
-    }
-    if (this.shrineReady && Phaser.Math.Distance.Between(this.player.x, this.player.y, SHRINE_POSITION.x, SHRINE_POSITION.y) < 34) {
-      this.shrineReady = false;
-      this.callbacks.event('shrine');
     }
     if (!this.seenSecrets.has('one') && Phaser.Math.Distance.Between(this.player.x, this.player.y, SECRET_POSITIONS['secret-one'].x, SECRET_POSITIONS['secret-one'].y) < 26) {
       this.seenSecrets.add('one');

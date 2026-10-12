@@ -32,6 +32,19 @@ export const HEROES: Record<HeroId, { name: string; stats: Stats; startingItem: 
   },
 };
 
+export interface StartOption { id: string; unlockAchievement?: string }
+/** Options de départ par classe : la première de chaque liste est le choix de base, toujours disponible. */
+export const STARTING_OPTIONS: Record<HeroId, { weapons: StartOption[]; passives: StartOption[] }> = {
+  warrior: {
+    weapons: [{ id: 'iron-sword' }, { id: 'alpha-fang', unlockAchievement: 'forest-slain' }, { id: 'grave-blade', unlockAchievement: 'crypt-slain' }],
+    passives: [{ id: 'iron-skin' }, { id: 'battle-heart', unlockAchievement: 'ten-kills' }, { id: 'shielded', unlockAchievement: 'meadow-slain' }, { id: 'stone-heart', unlockAchievement: 'warrior-level-10' }],
+  },
+  assassin: {
+    weapons: [{ id: 'duelist-blade' }, { id: 'alpha-fang', unlockAchievement: 'forest-slain' }, { id: 'grave-blade', unlockAchievement: 'crypt-slain' }],
+    passives: [{ id: 'quick-step' }, { id: 'keen-eye', unlockAchievement: 'ten-kills' }, { id: 'venom', unlockAchievement: 'meadow-slain' }, { id: 'lucky-dagger', unlockAchievement: 'assassin-level-10' }],
+  },
+};
+
 export const ITEMS: ItemDefinition[] = [
   { id: 'iron-sword', name: 'Épée de fer', slot: 'weapon', description: '+3 force', stats: { strength: 3 }, rarity: 'common' },
   { id: 'duelist-blade', name: 'Lame du duelliste', slot: 'weapon', description: '+2 force, +0,1 vitesse', stats: { strength: 2, speed: 0.1 }, rarity: 'common' },

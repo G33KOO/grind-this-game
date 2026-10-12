@@ -1,4 +1,4 @@
-import { ACHIEVEMENTS, BALANCE, ENEMIES, HEROES, ITEMS, PASSIVES, ZONES, masteryRank } from './content';
+import { ACHIEVEMENTS, BALANCE, ENEMIES, HEROES, ITEMS, PASSIVES, STARTING_OPTIONS, ZONES, masteryRank, type StartOption } from './content';
 import { WORLD_START } from './world';
 import type { AchievementDefinition, CombatState, Effect, HeroId, ItemDefinition, ItemInstance, Profile, RunState, Slot, Stats } from './types';
 
@@ -18,17 +18,32 @@ export function initialProfile(): Profile {
   return { version: 1, mastery: { warrior: 0, assassin: 0 }, achievements: [], unlockedItems: [], unlockedPassives: [], paths: [] };
 }
 
-export function newRun(hero: HeroId, seed = 0x71a9c3): RunState {
+export interface Loadout { weapon?: string; passive?: string }
+
+export function isStartOptionUnlocked(option: StartOption, profile: Profile): boolean {
+  return !option.unlockAchievement || profile.achievements.includes(option.unlockAchievement);
+}
+
+/** Retourne le choix demandé s'il est proposé et débloqué, sinon le choix de base de la classe. */
+export function resolveLoadout(hero: HeroId, profile: Profile, loadout: Loadout = {}): Required<Loadout> {
+  const pick = (options: StartOption[], wanted?: string) => {
+    const found = options.find((option) => option.id === wanted);
+    return found && isStartOptionUnlocked(found, profile) ? found.id : options[0].id;
+  };
+  return { weapon: pick(STARTING_OPTIONS[hero].weapons, loadout.weapon), passive: pick(STARTING_OPTIONS[hero].passives, loadout.passive) };
+}
+
+export function newRun(hero: HeroId, seed = 0x71a9c3, loadout?: Required<Loadout>): RunState {
   const start = HEROES[hero];
   return {
     version: 2, developerMode: false, hero, level: 1, xp: 0, xpToNext: 60, unspentPoints: 0, invested: {},
     hp: start.stats.maxHp, position: { ...WORLD_START }, encounterMeter: 0, distanceSinceEncounterCheck: 0, rngState: seed >>> 0 || 1,
     inventory: [
-      { instanceId: 'starter-weapon', itemId: start.startingItem },
+      { instanceId: 'starter-weapon', itemId: loadout?.weapon ?? start.startingItem },
       { instanceId: 'starter-potion', itemId: 'small-potion' },
     ],
     equipment: { weapon: 'starter-weapon' },
-    passives: [], pendingPassivePicks: 0, pendingCombat: null, defeatedBosses: [], secrets: [], usedShrines: [],
+    passives: loadout ? [{ id: loadout.passive, rank: 1 }] : [], pendingPassivePicks: 0, pendingCombat: null, defeatedBosses: [], secrets: [], usedShrines: [],
     kills: 0, victories: 0, result: 'active',
   };
 }

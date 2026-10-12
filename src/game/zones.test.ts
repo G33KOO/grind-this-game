@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { ENEMIES, ZONES } from './content';
 import { newRun, rollEncounter } from './engine';
-import { BOSS_POSITIONS, PATHS, SECRET_POSITIONS, SHRINE_POSITION, WORLD_START, ZONE_SHAPES, isWalkable, zoneAt } from './world';
+import { BOSS_POSITIONS, PATHS, SECRET_POSITIONS, WORLD_START, ZONE_SHAPES, isWalkable, zoneAt } from './world';
 
 describe('contained tunnel layout', () => {
   it('keeps key points inside walkable space', () => {
-    const points = [WORLD_START, SHRINE_POSITION, ...Object.values(BOSS_POSITIONS), ...Object.values(SECRET_POSITIONS), ...Object.values(ZONE_SHAPES)];
+    const points = [WORLD_START, ...Object.values(BOSS_POSITIONS), ...Object.values(SECRET_POSITIONS), ...Object.values(ZONE_SHAPES)];
     for (const point of points) expect(isWalkable(point.x, point.y, 30)).toBe(true);
   });
 
