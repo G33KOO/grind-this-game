@@ -256,6 +256,10 @@ kbd { font: 10px "DM Mono", monospace; color: var(--muted); border: 1px solid #5
 .passive-card strong { color: #fff; }
 .passive-list span { display: inline-flex; align-items: center; gap: 6px; }
 
+.title-menu { display: flex; gap: 10px; margin-top: 14px; }
+.title-overlay { position: fixed; inset: 0; z-index: 50; display: grid; place-items: center; background: #04080ccc; }
+.title-overlay .modal-panel { position: relative; max-height: 86vh; overflow: auto; text-align: left; }
+
 /* Maîtrise et succès */
 .mastery-panel { margin: 12px 0; padding: 12px 14px; border: 1px solid #2ee6c866; border-radius: 12px; background: #2ee6c80d; }
 .mastery-head { display: flex; justify-content: space-between; gap: 10px; flex-wrap: wrap; font-size: 13px; }

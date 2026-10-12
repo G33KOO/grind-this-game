@@ -15,7 +15,7 @@ import { ItemIcon, RARITIES, type Rarity } from './icons';
 const passiveRarity = (weight: number): Rarity => weight >= 4 ? 'common' : weight >= 3 ? 'uncommon' : weight >= 2 ? 'rare' : weight >= 1 ? 'epic' : 'legendary';
 import type { CombatState, HeroId, Profile, RunState } from '../game/types';
 
-type Screen = 'title' | 'world' | 'combat' | 'inventory' | 'stats' | 'settings' | 'summary';
+type Screen = 'title' | 'world' | 'combat' | 'inventory' | 'stats' | 'settings' | 'achievements' | 'summary';
 const percentage = (value: number, max: number) => `${Math.max(0, Math.min(100, Math.round(value / Math.max(1, max) * 100)))}%`;
 
 export function App() {
@@ -26,6 +26,7 @@ export function App() {
   const profileHealthy = useRef(true);
   const [screen, setScreen] = useState<Screen>('title');
   const [newRunSelection, setNewRunSelection] = useState(false);
+  const [titlePanel, setTitlePanel] = useState<'settings' | 'achievements' | null>(null);
   const [combat, setCombat] = useState<CombatState | null>(null);
   const combatRef = useRef<CombatState | null>(null);
   const [settings, setSettings] = useState<Settings>(() => loadSettings());
@@ -416,7 +417,15 @@ export function App() {
       </div>}
       {run?.result === 'active' && newRunSelection && <button onClick={() => setNewRunSelection(false)}>Annuler et reprendre la sauvegarde</button>}
       {(!run || run.result !== 'active' || newRunSelection) && <label className="dev-toggle"><input type="checkbox" checked={developmentMode} onChange={(event) => setDevelopmentMode(event.target.checked)} /> Mode développeur : départ niveau 8</label>}
+      <div className="title-menu">
+        <button onClick={() => setTitlePanel('achievements')}>Succès · {profile.achievements.length}/{ACHIEVEMENTS.length}</button>
+        <button onClick={() => setTitlePanel('settings')}>Paramètres</button>
+      </div>
       <p className="small-note">Sauvegarde automatique locale · Solo · Aucun compte requis</p>
+      {titlePanel && <div className="title-overlay"><section className="panel modal-panel">
+        <PanelHeading label={titlePanel === 'settings' ? 'PRÉFÉRENCES' : 'PROGRESSION PERMANENTE'} title={titlePanel === 'settings' ? 'Paramètres' : 'Succès'} onClose={() => setTitlePanel(null)} />
+        {titlePanel === 'settings' ? <SettingsBody settings={settings} setSettings={setSettings} /> : <AchievementList profile={profile} />}
+      </section></div>}
     </main>;
   }
 
@@ -440,6 +449,7 @@ export function App() {
       <nav aria-label="Menu du jeu">
         <button aria-label="Inventaire" title="Inventaire (I)" disabled={screen === 'combat'} onClick={openInventory}><span aria-hidden="true">▣</span><kbd>I</kbd></button>
         <button aria-label="Personnage" title="Personnage (C)" disabled={screen === 'combat'} onClick={() => { if (run.pendingPassivePicks > 0) setPassiveOffers(passiveChoices(run, profile)); setScreen('stats'); sceneRef.current?.togglePause(true); }}><span aria-hidden="true">✦</span><kbd>C</kbd></button>
+        <button aria-label="Succès" title="Succès" disabled={screen === 'combat'} onClick={() => { setScreen('achievements'); sceneRef.current?.togglePause(true); }}><span aria-hidden="true">★</span></button>
         <button aria-label="Options" title="Options" disabled={screen === 'combat'} onClick={() => setScreen('settings')}><span aria-hidden="true">⚙</span></button>
         <button aria-label={pause ? 'Reprendre' : 'Mettre en pause'} title={pause ? 'Reprendre (Échap)' : 'Pause (Échap)'} onClick={() => setPause((value) => !value)}><span aria-hidden="true">{pause ? '▶' : 'Ⅱ'}</span></button>
       </nav>
@@ -529,10 +539,12 @@ export function App() {
 
     {screen === 'settings' && <section className="panel modal-panel">
       <PanelHeading label="PRÉFÉRENCES" title="Options" onClose={backToWorld} />
-      <label className="setting-row">Volume <input type="range" min="0" max="1" step="0.05" value={settings.volume} onChange={(event) => setSettings({ ...settings, volume: Number(event.target.value) })} /><span>{Math.round(settings.volume * 100)} %</span></label>
-      <div className="setting-row">Vitesse du combat <div className="button-group">{([1, 2, 4] as const).map((speed) => <button className={settings.combatSpeed === speed ? 'selected' : ''} key={speed} onClick={() => setSettings({ ...settings, combatSpeed: speed })}>×{speed}</button>)}</div></div>
-      <button onClick={() => { const fullscreen = !settings.fullscreen; setSettings({ ...settings, fullscreen }); if (fullscreen) void document.documentElement.requestFullscreen?.(); else if (document.fullscreenElement) void document.exitFullscreen(); }}>Plein écran : {settings.fullscreen ? 'activé' : 'désactivé'}</button>
-      <p className="small-note">L’accélération ne change que la présentation et l’avancement du temps logique : les décisions et l’ordre des actions restent déterministes.</p>
+      <SettingsBody settings={settings} setSettings={setSettings} />
+    </section>}
+
+    {screen === 'achievements' && <section className="panel modal-panel">
+      <PanelHeading label="PROGRESSION PERMANENTE" title="Succès" onClose={backToWorld} />
+      <AchievementList profile={profile} />
     </section>}
 
     {screen === 'summary' && <section className="panel modal-panel summary-panel">
@@ -575,8 +587,17 @@ function MasteryPanel({ hero, levels }: { hero: HeroId; levels: number }) {
   </div>;
 }
 
-function AchievementList({ profile, hero }: { profile: Profile; hero: HeroId }) {
-  const visible = ACHIEVEMENTS.filter((entry) => !entry.hero || entry.hero === hero);
+function SettingsBody({ settings, setSettings }: { settings: Settings; setSettings: (value: Settings) => void }) {
+  return <>
+    <label className="setting-row">Volume <input type="range" min="0" max="1" step="0.05" value={settings.volume} onChange={(event) => setSettings({ ...settings, volume: Number(event.target.value) })} /><span>{Math.round(settings.volume * 100)} %</span></label>
+    <div className="setting-row">Vitesse du combat <div className="button-group">{([1, 2, 4] as const).map((speed) => <button className={settings.combatSpeed === speed ? 'selected' : ''} key={speed} onClick={() => setSettings({ ...settings, combatSpeed: speed })}>×{speed}</button>)}</div></div>
+    <button onClick={() => { const fullscreen = !settings.fullscreen; setSettings({ ...settings, fullscreen }); if (fullscreen) void document.documentElement.requestFullscreen?.(); else if (document.fullscreenElement) void document.exitFullscreen(); }}>Plein écran : {settings.fullscreen ? 'activé' : 'désactivé'}</button>
+    <p className="small-note">L’accélération ne change que la présentation et l’avancement du temps logique : les décisions et l’ordre des actions restent déterministes.</p>
+  </>;
+}
+
+function AchievementList({ profile, hero }: { profile: Profile; hero?: HeroId }) {
+  const visible = ACHIEVEMENTS.filter((entry) => !hero || !entry.hero || entry.hero === hero);
   return <div className="achievement-list">
     <h3>Succès · {visible.filter((entry) => profile.achievements.includes(entry.id)).length}/{visible.length}</h3>
     {visible.map((entry) => {
