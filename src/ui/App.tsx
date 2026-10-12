@@ -432,26 +432,26 @@ export function App() {
   return <main className="shell game-shell">
     <header className="topbar">
       <div className="hud-player">
-        <button className="wordmark" aria-label="Retour au menu" title="Menu" disabled={screen === 'combat'} onClick={() => setScreen('title')}>G</button>
+        <button className="wordmark" aria-label="Retour au menu" data-tip="Retour au menu principal" disabled={screen === 'combat'} onClick={() => setScreen('title')}>G</button>
         <div className="hud-details">
-          <div className="hud-identity"><strong>{HEROES[run.hero].name}</strong><span>NIV. {run.level}</span></div>
+          <div className="hud-identity" data-tip="Votre classe et votre niveau"><strong>{HEROES[run.hero].name}</strong><span>NIV. {run.level}</span></div>
           <div className="hud-vitals">
-            <div className="hud-meter" aria-label={`Vie : ${run.hp} sur ${stats?.maxHp ?? 0}`}>
+            <div className="hud-meter" data-tip="Points de vie : à 0, la partie est perdue" aria-label={`Vie : ${run.hp} sur ${stats?.maxHp ?? 0}`}>
               <span>PV</span><div className="meter hp"><i style={{ width: percentage(run.hp, stats?.maxHp ?? 1) }} /></div><small>{run.hp}</small>
             </div>
-            <div className="hud-meter" aria-label={`Expérience : ${run.xp} sur ${run.xpToNext}`}>
+            <div className="hud-meter" data-tip="Expérience : remplissez la jauge pour gagner un niveau" aria-label={`Expérience : ${run.xp} sur ${run.xpToNext}`}>
               <span>XP</span><div className="meter xp"><i style={{ width: percentage(run.xp, run.xpToNext) }} /></div><small>{run.xp}/{run.xpToNext}</small>
             </div>
           </div>
         </div>
       </div>
-      <div className="world-location">{zoneAt(run.position.x, run.position.y).name}</div>
+      <div className="world-location" data-tip="Zone actuelle">{zoneAt(run.position.x, run.position.y).name}</div>
       <nav aria-label="Menu du jeu">
-        <button aria-label="Inventaire" title="Inventaire (I)" disabled={screen === 'combat'} onClick={openInventory}><span aria-hidden="true">▣</span><kbd>I</kbd></button>
-        <button aria-label="Personnage" title="Personnage (C)" disabled={screen === 'combat'} onClick={() => { if (run.pendingPassivePicks > 0) setPassiveOffers(passiveChoices(run, profile)); setScreen('stats'); sceneRef.current?.togglePause(true); }}><span aria-hidden="true">✦</span><kbd>C</kbd></button>
-        <button aria-label="Succès" title="Succès" disabled={screen === 'combat'} onClick={() => { setScreen('achievements'); sceneRef.current?.togglePause(true); }}><span aria-hidden="true">★</span></button>
-        <button aria-label="Options" title="Options" disabled={screen === 'combat'} onClick={() => setScreen('settings')}><span aria-hidden="true">⚙</span></button>
-        <button aria-label={pause ? 'Reprendre' : 'Mettre en pause'} title={pause ? 'Reprendre (Échap)' : 'Pause (Échap)'} onClick={() => setPause((value) => !value)}><span aria-hidden="true">{pause ? '▶' : 'Ⅱ'}</span></button>
+        <button aria-label="Inventaire" data-tip="Inventaire et équipement (I)" disabled={screen === 'combat'} onClick={openInventory}><span aria-hidden="true">▣</span><kbd>I</kbd></button>
+        <button aria-label="Personnage" data-tip="Statistiques, maîtrise et passifs (C)" disabled={screen === 'combat'} onClick={() => { if (run.pendingPassivePicks > 0) setPassiveOffers(passiveChoices(run, profile)); setScreen('stats'); sceneRef.current?.togglePause(true); }}><span aria-hidden="true">✦</span><kbd>C</kbd></button>
+        <button aria-label="Succès" data-tip="Succès débloqués et à débloquer" disabled={screen === 'combat'} onClick={() => { setScreen('achievements'); sceneRef.current?.togglePause(true); }}><span aria-hidden="true">★</span></button>
+        <button aria-label="Options" data-tip="Paramètres : volume, vitesse, plein écran" disabled={screen === 'combat'} onClick={() => setScreen('settings')}><span aria-hidden="true">⚙</span></button>
+        <button aria-label={pause ? 'Reprendre' : 'Mettre en pause'} data-tip={pause ? 'Reprendre le jeu (Échap)' : 'Mettre en pause (Échap)'} onClick={() => setPause((value) => !value)}><span aria-hidden="true">{pause ? '▶' : 'Ⅱ'}</span></button>
       </nav>
     </header>
     <section className={`stage ${screen === 'summary' ? 'stage-hidden' : ''}`} aria-label="Carte du monde">
@@ -534,7 +534,7 @@ export function App() {
           const rarity = passiveRarity(definition?.weight ?? 5);
           return <span key={passive.id} className={`rarity-${rarity}`} style={{ color: RARITIES[rarity].color, borderLeft: `3px solid ${RARITIES[rarity].color}` }}><ItemIcon id={passive.id} rarity={rarity} size={26} />{definition?.name} · rang {passive.rank}</span>;
         })}</div>
-        <AchievementList profile={profile} hero={run.hero} /></>}
+        </>}
     </section>}
 
     {screen === 'settings' && <section className="panel modal-panel">
@@ -596,8 +596,8 @@ function SettingsBody({ settings, setSettings }: { settings: Settings; setSettin
   </>;
 }
 
-function AchievementList({ profile, hero }: { profile: Profile; hero?: HeroId }) {
-  const visible = ACHIEVEMENTS.filter((entry) => !hero || !entry.hero || entry.hero === hero);
+function AchievementList({ profile }: { profile: Profile }) {
+  const visible = ACHIEVEMENTS;
   return <div className="achievement-list">
     <h3>Succès · {visible.filter((entry) => profile.achievements.includes(entry.id)).length}/{visible.length}</h3>
     {visible.map((entry) => {
