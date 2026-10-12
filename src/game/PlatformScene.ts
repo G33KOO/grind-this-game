@@ -33,7 +33,8 @@ const neonOf = (zoneId: string): number => NEON[zoneId] ?? 0x2ee6c8;
 
 export class PlatformScene extends Phaser.Scene {
   private player!: Phaser.Types.Physics.Arcade.SpriteWithDynamicBody;
-  private keys!: Record<string, Phaser.Input.Keyboard.Key>;
+  private held = new Set<string>();
+  private moveKeys = { up: 'KeyW', down: 'KeyS', left: 'KeyA', right: 'KeyD' };
   private walls!: Phaser.Physics.Arcade.StaticGroup;
   private bosses: { id: string; body: Phaser.GameObjects.Arc; visual: Phaser.GameObjects.Graphics }[] = [];
   private trail!: Phaser.GameObjects.Graphics;
@@ -352,7 +353,9 @@ export class PlatformScene extends Phaser.Scene {
         if (!this.callbacks.isBossDefeated?.(boss.id)) this.callbacks.event(`boss:${boss.id}`);
       });
     }
-    this.keys = this.input.keyboard!.addKeys('W,A,S,D,Z,Q,UP,DOWN,LEFT,RIGHT,SPACE') as Record<string, Phaser.Input.Keyboard.Key>;
+    this.input.keyboard!.on('keydown', (event: KeyboardEvent) => this.held.add(event.code));
+    this.input.keyboard!.on('keyup', (event: KeyboardEvent) => this.held.delete(event.code));
+    this.game.events.on(Phaser.Core.Events.BLUR, () => this.held.clear());
     this.buildFog();
     this.cameras.main.setBounds(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
     this.cameras.main.setZoom(this.cameraZoom(this.scale.height));
@@ -377,10 +380,9 @@ export class PlatformScene extends Phaser.Scene {
 
   update(_time: number, delta: number): void {
     const controller = navigator.getGamepads?.().find((gamepad) => gamepad?.connected) ?? null;
-    let x = Number(this.keys.D.isDown) - Number(this.keys.A.isDown || this.keys.Q.isDown);
-    let y = Number(this.keys.S.isDown) - Number(this.keys.W.isDown || this.keys.Z.isDown);
-    x += Number(this.keys.RIGHT.isDown) - Number(this.keys.LEFT.isDown);
-    y += Number(this.keys.DOWN.isDown) - Number(this.keys.UP.isDown);
+    const down = (code: string, alt: string) => Number(this.held.has(code) || this.held.has(alt));
+    let x = down(this.moveKeys.right, 'ArrowRight') - down(this.moveKeys.left, 'ArrowLeft');
+    let y = down(this.moveKeys.down, 'ArrowDown') - down(this.moveKeys.up, 'ArrowUp');
     if (controller) {
       const axisX = controller.axes[0] ?? 0;
       const axisY = controller.axes[1] ?? 0;
@@ -449,9 +451,14 @@ export class PlatformScene extends Phaser.Scene {
     if (paused) {
       this.physics.world.pause();
       this.player.setVelocity(0, 0);
-      for (const key of Object.values(this.keys)) key.reset();
+      this.held.clear();
     }
     else this.physics.world.resume();
+  }
+
+  setMoveKeys(keys: { up: string; down: string; left: string; right: string }): void {
+    this.moveKeys = keys;
+    this.held.clear();
   }
 
   teleport(x: number, y: number): void {

@@ -7,13 +7,27 @@ const BACKUP_KEY = `${RUN_KEY}.backup`;
 const SETTINGS_KEY = 'grind-this-game.settings';
 let desktopSaveQueue: Promise<void> = Promise.resolve();
 
+export type BindingAction = 'up' | 'down' | 'left' | 'right' | 'inventory' | 'character';
+export type Bindings = Record<BindingAction, string>;
+export type GlowLevel = 'full' | 'low' | 'off';
+
 export interface Settings {
   volume: number;
   combatSpeed: 1 | 2 | 4;
   fullscreen: boolean;
+  bindings: Bindings;
+  glow: GlowLevel;
+  uiScale: 0.9 | 1 | 1.15 | 1.3;
+  reduceMotion: boolean;
+  highContrast: boolean;
 }
 
-export const DEFAULT_SETTINGS: Settings = { volume: 0.7, combatSpeed: 1, fullscreen: false };
+export const DEFAULT_BINDINGS: Bindings = { up: 'KeyW', down: 'KeyS', left: 'KeyA', right: 'KeyD', inventory: 'KeyI', character: 'KeyC' };
+export const DEFAULT_SETTINGS: Settings = {
+  volume: 0.7, combatSpeed: 1, fullscreen: false, bindings: DEFAULT_BINDINGS,
+  glow: 'full', uiScale: 1, reduceMotion: false, highContrast: false,
+};
+const UI_SCALES = [0.9, 1, 1.15, 1.3] as const;
 
 export async function loadRun(): Promise<RunState | null> {
   if (window.gamePlatform) {
@@ -96,10 +110,20 @@ export function loadSettings(): Settings {
   try {
     const parsed = JSON.parse(raw) as Partial<Settings>;
     const speed = parsed.combatSpeed === 2 || parsed.combatSpeed === 4 ? parsed.combatSpeed : 1;
+    const bindings = { ...DEFAULT_BINDINGS };
+    for (const action of Object.keys(bindings) as BindingAction[]) {
+      const code = (parsed.bindings as Partial<Bindings> | undefined)?.[action];
+      if (typeof code === 'string' && /^[A-Za-z0-9]{1,20}$/.test(code)) bindings[action] = code;
+    }
     return {
       volume: typeof parsed.volume === 'number' ? Math.max(0, Math.min(1, parsed.volume)) : DEFAULT_SETTINGS.volume,
       combatSpeed: speed,
       fullscreen: parsed.fullscreen === true,
+      bindings,
+      glow: parsed.glow === 'low' || parsed.glow === 'off' ? parsed.glow : 'full',
+      uiScale: UI_SCALES.find((scale) => scale === parsed.uiScale) ?? 1,
+      reduceMotion: parsed.reduceMotion === true,
+      highContrast: parsed.highContrast === true,
     };
   } catch {
     return DEFAULT_SETTINGS;

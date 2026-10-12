@@ -269,14 +269,12 @@ export interface BattleSceneProps {
   zoneId: string;
   target: number;
   speed: number;
-  paused: boolean;
   saveError: boolean;
   onTarget(index: number): void;
-  onPause(): void;
   onRetry(): void;
 }
 
-export function BattleScene({ combat, hero, heroName, heroColor, zoneId, target, speed, paused, saveError, onTarget, onPause, onRetry }: BattleSceneProps) {
+export function BattleScene({ combat, hero, heroName, heroColor, zoneId, target, speed, saveError, onTarget, onRetry }: BattleSceneProps) {
   const backdrop = ZONE_BACKDROPS[zoneId] ?? ZONE_BACKDROPS.meadow;
   const count = combat.enemies.length;
   return (
@@ -284,7 +282,6 @@ export function BattleScene({ combat, hero, heroName, heroColor, zoneId, target,
       <div className="battle-sky" />
       <svg className="battle-backdrop" viewBox="0 0 1200 260" preserveAspectRatio="xMidYMax slice" aria-hidden="true">{backdrop.scene}</svg>
       <div className="battle-ground" />
-      <button className="battle-pause" onClick={onPause} aria-label={paused ? 'Reprendre' : 'Pause'}>{paused ? '▶' : 'Ⅱ'}</button>
       <div className="battle-speed" aria-hidden="true">×{speed} · ← → ou Tab : cible</div>
       <div className="battle-enemies">
         {combat.enemies.map((enemy, index) => (
@@ -302,7 +299,6 @@ export function BattleScene({ combat, hero, heroName, heroColor, zoneId, target,
       </Fighter>
       <div className="battle-log" aria-live="polite">{combat.log.slice(-4).map((entry, index) => <p key={`${index}-${entry}`}>{entry}</p>)}</div>
       {saveError && combat.over !== 'none' && <button className="primary battle-retry" onClick={onRetry}>Réessayer l’enregistrement du combat</button>}
-      {paused && <div className="pause-overlay"><strong>Combat en pause</strong><button className="primary" onClick={onPause}>Reprendre</button><small>Échap pour reprendre</small></div>}
     </section>
   );
 }
