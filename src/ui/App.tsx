@@ -416,7 +416,7 @@ export function App() {
     return <main className="shell title-screen">
       <div className="title-grid" aria-hidden="true" />
       <NeonLogo size={110} />
-      <h1 className="wordmark-title"><span>GRIND</span><small>THIS GAME</small></h1>
+      <h1 className="wordmark-title"><span>GRIND</span><small>IT</small></h1>
       {error && <div className="notice error">{error}</div>}
       {run?.result === 'active' && !newRunSelection && <>
         <button className="primary" onClick={() => setScreen('world')}>Reprendre la partie</button>

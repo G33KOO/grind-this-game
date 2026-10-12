@@ -37,7 +37,7 @@
   },
   "build": {
     "appId": "com.g33koo.grindthisgame",
-    "productName": "Grind This Game",
+    "productName": "Grind It",
     "directories": {
       "output": "release/windows"
     },

@@ -1,5 +1,5 @@
 export function NeonLogo({ size = 96 }: { size?: number }) {
-  return <svg className="neon-logo" width={size} height={size} viewBox="0 0 100 100" role="img" aria-label="Grind This Game">
+  return <svg className="neon-logo" width={size} height={size} viewBox="0 0 100 100" role="img" aria-label="Grind It">
     <defs>
       <filter id="logo-glow" x="-50%" y="-50%" width="200%" height="200%">
         <feGaussianBlur stdDeviation="2.4" result="blur" />

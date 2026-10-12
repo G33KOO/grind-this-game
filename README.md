@@ -1,4 +1,4 @@
-﻿# Grind This Game
+﻿# Grind It
 
 Prototype jouable d’un RPG solo 2D à combats automatiques. TypeScript strict, Vite, Phaser, React, Electron et Vitest. Le moteur de règles est isolé dans `src/game` et ne dépend pas de Phaser ni de React.
 
