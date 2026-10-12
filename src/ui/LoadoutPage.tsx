@@ -1,8 +1,8 @@
-import { useState } from 'react';
+﻿import { useState } from 'react';
 import { ACHIEVEMENTS, HEROES, ITEMS, PASSIVES, STARTING_OPTIONS, type StartOption } from '../game/content';
 import { isStartOptionUnlocked, type Loadout } from '../game/engine';
 import type { HeroId, Profile } from '../game/types';
-import { ItemIcon, RARITIES, passiveRarity, type Rarity } from './icons';
+import { HERO_ACCENT, HeroGlyph, ItemIcon, RARITIES, passiveRarity, type Rarity } from './icons';
 
 interface OptionView { id: string; name: string; description: string; rarity: Rarity }
 
@@ -44,11 +44,11 @@ export function LoadoutPage({ hero, profile, onStart, onBack }: { hero: HeroId; 
   const options = STARTING_OPTIONS[hero];
   const [weapon, setWeapon] = useState(options.weapons[0].id);
   const [passive, setPassive] = useState(options.passives[0].id);
-  return <main className="shell title-screen classes-page" style={{ ['--accent' as string]: hero === 'warrior' ? '#2ee6c8' : '#ff8a4d' }}>
+  return <main className="shell title-screen classes-page" style={{ ['--accent' as string]: HERO_ACCENT[hero] }}>
     <div className="title-grid" aria-hidden="true" />
     <header className="classes-head">
       <button onClick={onBack}>← Retour</button>
-      <h2>{HEROES[hero].name} · équipement de départ</h2>
+      <h2><HeroGlyph hero={hero} size={20} /> {HEROES[hero].name} · équipement de départ</h2>
     </header>
     <section className="panel page-panel loadout-panel">
       <OptionGroup title="Arme de départ" options={options.weapons} describe={describeWeapon} selected={weapon} onSelect={setWeapon} profile={profile} />

@@ -173,7 +173,7 @@ export function advanceEncounter(run: RunState, distance: number, profile: Profi
     if (checkpointDistance >= BALANCE.encounterCheckDistance) {
       checkpointDistance = 0;
       const chance = meter >= BALANCE.maxEncounterMeter ? 1 :
-        clamp(BALANCE.encounterChancePerCheck + meter * 0.35, 0, 1);
+        clamp(0.005 + 0.995 * meter ** 6, 0, 1);
       const roll = nextRandom(rngState);
       rngState = roll.state;
       triggered = roll.value < chance;

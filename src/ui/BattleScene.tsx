@@ -25,7 +25,7 @@ const Eyes = ({ x, y, gap, size = 7, color = '#fff', pupil = INK }: { x: number;
 
 const ART_ALIAS: Record<string, string> = { 'meadow-boss': 'slime', 'forest-boss': 'wolf', 'marsh-boss': 'wisp', 'crypt-boss': 'skeleton' };
 
-function EnemyArt({ id: rawId, color }: { id: string; color: number }) {
+export function EnemyArt({ id: rawId, color }: { id: string; color: number }) {
   const id = ART_ALIAS[rawId] ?? rawId;
   const base = hex(color);
   const dark = shade(color, 0.65);

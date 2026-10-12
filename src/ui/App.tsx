@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+﻿import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Phaser from 'phaser';
 import { ACHIEVEMENTS, BALANCE, ENEMIES, HEROES, ITEMS, PASSIVES, ZONES, masteryLevelsForRank, masteryRank, MASTERY_MAX_RANK } from '../game/content';
 import {
@@ -10,11 +10,11 @@ import type { Loadout } from '../game/engine';
 import { DEFAULT_SETTINGS, loadProfile, loadRun, loadSettings, saveProfile, saveRun, saveSettings, type Settings } from '../game/save';
 import { SettingsBody } from './SettingsBody';
 import { NeonLogo } from './NeonLogo';
-import { PlatformScene, type MapCallbacks, type MapEvent } from '../game/PlatformScene';
+import { HERO_NEON, PlatformScene, type MapCallbacks, type MapEvent } from '../game/PlatformScene';
 import { ZONE_SHAPES, zoneAt } from '../game/world';
 import { BattleScene } from './BattleScene';
 import { CombatRecap, type CombatRecapData } from './CombatRecap';
-import { ItemIcon, RARITIES, passiveRarity, type Rarity } from './icons';
+import { HERO_ACCENT, HeroGlyph, ItemIcon, RARITIES, passiveRarity, type Rarity } from './icons';
 import { LoadoutPage } from './LoadoutPage';
 
 
@@ -32,6 +32,7 @@ export function App() {
   const profileHealthy = useRef(true);
   const [screen, setScreen] = useState<Screen>('title');
   const [newRunSelection, setNewRunSelection] = useState(false);
+  const [confirmAbandon, setConfirmAbandon] = useState(false);
   const [titlePanel, setTitlePanel] = useState<'settings' | 'achievements' | null>(null);
   const [heroDetail, setHeroDetail] = useState<HeroId | null>(null);
   const [loadoutHero, setLoadoutHero] = useState<HeroId | null>(null);
@@ -203,10 +204,9 @@ export function App() {
       },
       control: setDevice,
       isBossDefeated: (bossId) => !!runRef.current?.defeatedBosses.includes(bossId) ||
-        developmentMode ||
         (bossId === 'crypt-boss' && profileRef.current.paths.includes('ashen-path')),
     };
-    const worldScene = new PlatformScene(callbacks, run.position, HEROES[run.hero].color);
+    const worldScene = new PlatformScene(callbacks, run.position, HERO_NEON[run.hero] ?? HEROES[run.hero].color);
     let game: Phaser.Game | null = null;
     setWorldReady(false);
     // Laisse l'écran de chargement s'afficher avant la construction (synchrone) du monde
@@ -434,7 +434,6 @@ export function App() {
   };
 
   const abandonRun = () => {
-    if (!window.confirm('Abandonner la partie en cours ? Votre progression de cette partie sera perdue (succès et maîtrise conservés).')) return;
     syncRun(null); syncCombat(null); setNewRunSelection(false); setScreen('title');
     void saveRun(null).catch((saveError: unknown) => setError(saveError instanceof Error ? saveError.message : 'Échec de sauvegarde.'));
   };
@@ -454,13 +453,13 @@ export function App() {
         <nav className="classes-list" aria-label="Liste des classes">
           {(['warrior', 'assassin'] as const).map((hero) => {
             const rank = masteryRank(profile.mastery[hero] ?? 0);
-            return <button key={hero} className={`class-chip ${hero === heroDetail ? 'is-selected' : ''}`} aria-pressed={hero === heroDetail} style={{ ['--accent' as string]: hero === 'warrior' ? '#2ee6c8' : '#ff8a4d' }} onClick={() => setHeroDetail(hero)}>
-              <span className="hero-icon">{hero === 'warrior' ? '◆' : '◇'}</span>
+            return <button key={hero} className={`class-chip ${hero === heroDetail ? 'is-selected' : ''}`} aria-pressed={hero === heroDetail} style={{ ['--accent' as string]: HERO_ACCENT[hero] }} onClick={() => setHeroDetail(hero)}>
+              <span className="hero-icon"><HeroGlyph hero={hero} size={26} /></span>
               <span className="chip-body"><strong>{HEROES[hero].name}</strong><small>Maîtrise {rank}/{MASTERY_MAX_RANK}</small></span>
             </button>;
           })}
         </nav>
-        <section className="panel classes-detail" style={{ ['--accent' as string]: heroDetail === 'warrior' ? '#2ee6c8' : '#ff8a4d' }}>
+        <section className="panel classes-detail" style={{ ['--accent' as string]: HERO_ACCENT[heroDetail] }}>
           <PanelHeading label="CLASSE" title={HEROES[heroDetail].name} />
           <ClassDetails hero={heroDetail} profile={profile} />
         </section>
@@ -488,14 +487,25 @@ export function App() {
       <NeonLogo size={110} />
       <h1 className="wordmark-title"><span>GRIND</span><small>IT</small></h1>
       {error && <div className="notice error">{error}</div>}
-      {run?.result === 'active' && !newRunSelection && <>
+      {run?.result === 'active' && !newRunSelection && <div className="title-actions">
         <button className="primary" onClick={() => setScreen('world')}>Reprendre la partie</button>
         <button onClick={() => setNewRunSelection(true)}>Nouvelle partie</button>
-        <button className="danger" onClick={abandonRun}>Abandonner la partie</button>
-      </>}
+        <button className="danger" onClick={() => setConfirmAbandon(true)}>Abandonner la partie</button>
+      </div>}
+      {confirmAbandon && <div className="confirm-backdrop" role="presentation" onClick={() => setConfirmAbandon(false)}>
+        <div className="confirm-dialog" role="alertdialog" aria-modal="true" aria-labelledby="confirm-title" onClick={(event) => event.stopPropagation()}>
+          <span className="confirm-kicker">ATTENTION</span>
+          <h3 id="confirm-title">Abandonner la partie ?</h3>
+          <p>La progression de cette partie sera perdue. Les succès et la maîtrise sont conservés.</p>
+          <div className="confirm-actions">
+            <button autoFocus onClick={() => setConfirmAbandon(false)}>Annuler</button>
+            <button className="danger" onClick={() => { setConfirmAbandon(false); abandonRun(); }}>Abandonner</button>
+          </div>
+        </div>
+      </div>}
       {(!run || run.result !== 'active' || newRunSelection) && <div className="hero-picks">
-        {(['warrior', 'assassin'] as const).map((hero) => <button key={hero} className="hero-card" style={{ ['--accent' as string]: hero === 'warrior' ? '#2ee6c8' : '#ff8a4d' }} onClick={() => setLoadoutHero(hero)}>
-          <span className="hero-icon">{hero === 'warrior' ? '◆' : '◇'}</span>
+        {(['warrior', 'assassin'] as const).map((hero) => <button key={hero} className="hero-card" style={{ ['--accent' as string]: HERO_ACCENT[hero] }} onClick={() => setLoadoutHero(hero)}>
+          <span className="hero-icon"><HeroGlyph hero={hero} size={26} /></span>
           <strong>{HEROES[hero].name}</strong>
           <span>{hero === 'warrior' ? 'Défense, boucliers et endurance.' : 'Vitesse, critiques et poison.'}</span>
           <small>{HEROES[hero].stats.maxHp} PV · {HEROES[hero].stats.speed.toFixed(2)} vitesse</small>
@@ -510,8 +520,8 @@ export function App() {
           const floor = rank === 0 ? 0 : masteryLevelsForRank(rank);
           const next = rank >= MASTERY_MAX_RANK ? floor : masteryLevelsForRank(rank + 1);
           const ratio = next === floor ? 1 : (levels - floor) / (next - floor);
-          return <button key={hero} className="class-chip" style={{ ['--accent' as string]: hero === 'warrior' ? '#2ee6c8' : '#ff8a4d' }} onClick={() => setHeroDetail(hero)} aria-label={`Détails de la classe ${HEROES[hero].name}`}>
-            <span className="hero-icon">{hero === 'warrior' ? '◆' : '◇'}</span>
+          return <button key={hero} className="class-chip" style={{ ['--accent' as string]: HERO_ACCENT[hero] }} onClick={() => setHeroDetail(hero)} aria-label={`Détails de la classe ${HEROES[hero].name}`}>
+            <span className="hero-icon"><HeroGlyph hero={hero} size={26} /></span>
             <span className="chip-body"><strong>{HEROES[hero].name}</strong><small>Maîtrise {rank}/{MASTERY_MAX_RANK}</small>
               <span className="mastery-track"><i style={{ width: `${Math.round(ratio * 100)}%` }} /></span></span>
             <span className="chip-more">Détails</span>
@@ -531,7 +541,7 @@ export function App() {
       <div className="hud-player">
         <button className="wordmark" aria-label="Retour au menu" data-tip="Retour au menu principal" disabled={screen === 'combat'} onClick={() => setScreen('title')}><NeonLogo size={30} /></button>
         <div className="hud-details">
-          <div className="hud-identity" data-tip="Votre classe et votre niveau"><strong>{HEROES[run.hero].name}</strong><span>NIV. {run.level}</span></div>
+          <div className="hud-identity" data-tip="Votre classe et votre niveau"><HeroGlyph hero={run.hero} size={14} /><strong>{HEROES[run.hero].name}</strong><span>NIV. {run.level}</span></div>
           <div className="hud-vitals">
             <div className="hud-meter" data-tip="Points de vie : à 0, la partie est perdue" aria-label={`Vie : ${run.hp} sur ${stats?.maxHp ?? 0}`}>
               <span>PV</span><div className="meter hp"><i style={{ width: percentage(run.hp, stats?.maxHp ?? 1) }} /></div><small>{run.hp}</small>

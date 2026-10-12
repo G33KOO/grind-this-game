@@ -1,5 +1,6 @@
 ﻿import Phaser from 'phaser';
-import { BALANCE, ZONES } from './content';
+import { BALANCE, ENEMIES, ZONES } from './content';
+import { bossSvg } from '../ui/bossSvg';
 import {
   BOSS_BLOCK_RADIUS, BOSS_POSITIONS, SECRET_POSITIONS, WORLD_HEIGHT, WORLD_START, WORLD_WIDTH, clearance, generateDecor, isWalkable, noise, zoneScores,
   type Decor,
@@ -16,6 +17,7 @@ export interface MapCallbacks {
 }
 
 const PLAYER_SPEED = 175;
+interface BossEntry { id: string; body: Phaser.GameObjects.Zone; art?: Phaser.GameObjects.Image }
 const SOLID_KINDS: Partial<Record<Decor['kind'], number>> = {
   tree: 0.4, rock: 0.45, pond: 0.48, pillar: 0.45, tombstone: 0.4, lava: 0.45, obsidian: 0.42, 'dead-tree': 0.3, log: 0.3,
 };
@@ -24,13 +26,14 @@ const css =  (color: number): string => `#${color.toString(16).padStart(6, '0')}
 const VOID = 0x04070c;
 const NEON: Record<string, number> = { meadow: 0x2ee6c8, forest: 0x58ff6e, marsh: 0x35a7ff, crypt: 0xb36bff, ashen: 0xff6a2e };
 const neonOf = (zoneId: string): number => NEON[zoneId] ?? 0x2ee6c8;
+export const HERO_NEON: Record<string, number> = { warrior: 0x3db8ff, assassin: 0xff8a4d };
 
 export class PlatformScene extends Phaser.Scene {
   private player!: Phaser.Types.Physics.Arcade.SpriteWithDynamicBody;
   private held = new Set<string>();
   private moveKeys = { up: 'KeyW', down: 'KeyS', left: 'KeyA', right: 'KeyD' };
   private walls!: Phaser.Physics.Arcade.StaticGroup;
-  private bosses: { id: string; body: Phaser.GameObjects.Zone; visual: Phaser.GameObjects.Graphics }[] = [];
+  private bosses: BossEntry[] = [];
   private trail!: Phaser.GameObjects.Graphics;
   private trailPoints: { x: number; y: number }[] = [];
   private callbacks: MapCallbacks;
@@ -306,8 +309,36 @@ export class PlatformScene extends Phaser.Scene {
     }
   }
 
-  private neonRing(graphics: Phaser.GameObjects.Graphics, x: number, y: number, radius: number, color: number): void {
-    for (const [width, alpha] of [[8, 0.07], [4, 0.2], [1.6, 1]]) graphics.lineStyle(width, color, alpha).strokeCircle(x, y, radius);
+  private loadBossArt(entry: BossEntry, position: { x: number; y: number }, color: number): void {
+    const key = `boss-art-${entry.id}`;
+    const image = new Image();
+    image.onload = () => {
+      if (!this.sys?.isActive()) return;
+      if (!this.textures.exists(key)) this.textures.addImage(key, image);
+      const offset = this.contentOffset(image);
+      entry.art = this.add.image(position.x - offset.x * 0.4, position.y - offset.y * 0.4, key).setDisplaySize(128, 128).setDepth(2.1);
+      entry.art.setVisible(!this.callbacks.isBossDefeated?.(entry.id));
+      this.tweens.add({ targets: entry.art, y: entry.art.y - 4, duration: 1400, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+    };
+    image.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(bossSvg(entry.id, color))}`;
+  }
+
+  // Écart (en pixels de l'image source) entre le centre du dessin visible et le centre de l'image.
+  private contentOffset(image: HTMLImageElement): { x: number; y: number } {
+    const size = 64;
+    const canvas = document.createElement('canvas');
+    canvas.width = size;
+    canvas.height = size;
+    const context = canvas.getContext('2d');
+    if (!context) return { x: 0, y: 0 };
+    context.drawImage(image, 0, 0, size, size);
+    const data = context.getImageData(0, 0, size, size).data;
+    let minX = size, minY = size, maxX = -1, maxY = -1;
+    for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) {
+      if (data[(y * size + x) * 4 + 3] > 40) { minX = Math.min(minX, x); maxX = Math.max(maxX, x); minY = Math.min(minY, y); maxY = Math.max(maxY, y); }
+    }
+    if (maxX < 0) return { x: 0, y: 0 };
+    return { x: ((minX + maxX) / 2 - size / 2) * (320 / size), y: ((minY + maxY) / 2 - size / 2) * (320 / size) };
   }
 
   private drawTrail(): void {
@@ -333,21 +364,19 @@ export class PlatformScene extends Phaser.Scene {
       const body = this.add.zone(position.x, position.y, BOSS_BLOCK_RADIUS * 2, BOSS_BLOCK_RADIUS * 2).setDepth(2);
       this.physics.add.existing(body, true);
       (body.body as Phaser.Physics.Arcade.StaticBody).setCircle(BOSS_BLOCK_RADIUS);
-      const visual = this.add.graphics().setDepth(2);
-      visual.fillStyle(0xff2a4a, 0.1).fillCircle(position.x, position.y, BOSS_BLOCK_RADIUS);
-      this.neonRing(visual, position.x, position.y, BOSS_BLOCK_RADIUS - 6, neonOf(zone.id));
-      this.neonRing(visual, position.x, position.y, 30, neonOf(zone.id));
-      this.neonRing(visual, position.x, position.y, 16, 0xff2a4a);
-      this.neonRing(visual, position.x, position.y, 6, 0xff8a9a);
-      this.tweens.add({ targets: visual, alpha: 0.55, duration: 900, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
-      this.bosses.push({ id: zone.boss, body, visual });
+      const entry: BossEntry = { id: zone.boss, body };
+      this.bosses.push(entry);
+      this.loadBossArt(entry, position, ENEMIES.find((enemy) => enemy.id === zone.boss)?.color ?? 0xffffff);
     }
     const playerGraphic = this.make.graphics({ x: 0, y: 0 });
-    for (const [radius, alpha] of [[44, 0.05], [36, 0.1], [28, 0.18]]) playerGraphic.fillStyle(this.playerColor, alpha).fillCircle(48, 48, radius);
-    playerGraphic.fillStyle(VOID, 0.95).fillCircle(48, 48, 18);
-    playerGraphic.lineStyle(6, this.playerColor, 0.22).strokeCircle(48, 48, 18);
-    playerGraphic.lineStyle(2, this.playerColor, 1).strokeCircle(48, 48, 18);
-    playerGraphic.fillStyle(0xffffff, 1).fillCircle(48, 48, 5);
+    const diamond = (half: number, tall: number): Phaser.Geom.Point[] => [
+      new Phaser.Geom.Point(48, 48 - tall), new Phaser.Geom.Point(48 + half, 48), new Phaser.Geom.Point(48, 48 + tall), new Phaser.Geom.Point(48 - half, 48),
+    ];
+    for (const [half, tall, alpha] of [[36, 44, 0.05], [30, 38, 0.1], [25, 32, 0.18]]) playerGraphic.fillStyle(this.playerColor, alpha).fillPoints(diamond(half, tall), true);
+    playerGraphic.fillStyle(VOID, 0.95).fillPoints(diamond(17, 24), true);
+    playerGraphic.lineStyle(6, this.playerColor, 0.22).strokePoints(diamond(17, 24), true);
+    playerGraphic.lineStyle(2, this.playerColor, 1).strokePoints(diamond(17, 24), true);
+    playerGraphic.fillStyle(0xffffff, 1).fillPoints(diamond(5, 7), true);
     playerGraphic.generateTexture('player-dot', 96, 96);
     playerGraphic.destroy();
     this.trail = this.add.graphics().setDepth(4);
@@ -418,7 +447,10 @@ export class PlatformScene extends Phaser.Scene {
       }
     }
     this.callbacks.travel?.(this.traveled);
-    for (const boss of this.bosses) boss.visual.setVisible(!this.callbacks.isBossDefeated?.(boss.id));
+    for (const boss of this.bosses) {
+      const alive = !this.callbacks.isBossDefeated?.(boss.id);
+      boss.art?.setVisible(alive);
+    }
     this.drawTrail();
     if (_time - this.lastReport > 250) {
       this.lastReport = _time;

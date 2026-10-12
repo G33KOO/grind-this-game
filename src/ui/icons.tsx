@@ -1,5 +1,17 @@
 import type { ReactNode } from 'react';
 
+/** Couleur d'accent des classes : identique au losange affiché dans le monde. */
+export const HERO_ACCENT: Record<string, string> = { warrior: '#3db8ff', assassin: '#ff8a4d' };
+
+export function HeroGlyph({ hero, size = 28, className = '' }: { hero: string; size?: number; className?: string }) {
+  const color = HERO_ACCENT[hero] ?? '#3db8ff';
+  return <svg className={`hero-glyph ${className}`} width={size} height={size * 1.2} viewBox="0 0 48 58" aria-hidden="true" style={{ filter: `drop-shadow(0 0 6px ${color}aa)` }}>
+    <polygon points="24,2 46,29 24,56 2,29" fill={`${color}22`} stroke={color} strokeOpacity=".25" strokeWidth="5" />
+    <polygon points="24,8 40,29 24,50 8,29" fill="#04070c" stroke={color} strokeWidth="2.4" />
+    <polygon points="24,22 29,29 24,36 19,29" fill="#fff" />
+  </svg>;
+}
+
 export type Rarity = 'common' | 'uncommon' | 'rare' | 'epic' | 'legendary';
 
 export const RARITIES: Record<Rarity, { label: string; color: string; glow: string }> = {
