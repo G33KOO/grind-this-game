@@ -1,4 +1,4 @@
-# Grind This Game
+﻿# Grind This Game
 
 Prototype jouable d’un RPG solo 2D à combats automatiques. TypeScript strict, Vite, Phaser, React, Electron et Vitest. Le moteur de règles est isolé dans `src/game` et ne dépend pas de Phaser ni de React.
 
@@ -42,7 +42,8 @@ Les définitions éditables sont dans `src/game/content.ts`. Ajouter un monstre 
 ## Sauvegardes et architecture
 
 - `src/game/engine.ts` : statistiques, expérience, rencontres, passifs (dont déblocages par maîtrise), loot, combat, progression et validation/migration de partie.
-- `src/game/PlatformScene.ts` : carte Phaser fixe, collisions, déplacements, manette et interactions de carte.
+- `src/game/PlatformScene.ts` : monde 3600×2600 avec caméra centrée sur le joueur, brouillard de guerre (zones découvertes enregistrées dans la sauvegarde), collisions, déplacements, manette et interactions de carte.
+- `src/game/world.ts` : forme organique des cinq zones (régions déformées par du bruit), décors générés de façon déterministe par biome, positions du sanctuaire, des secrets et du boss.
 - `src/ui/` : interfaces React ; aucun state React n’est mis à jour à chaque image.
 - `src/game/save.ts` : partie versionnée dans localStorage et profil/paramètres locaux.
 - `electron/` : fenêtre isolée, preload minimal, IPC limité aux sauvegardes, écriture atomique et copie de secours.
@@ -51,6 +52,6 @@ Le profil (maîtrise, achievements et déblocages) est distinct de la partie ; l
 
 ## Limites connues
 
-Ce premier prototype contient deux personnages, trois zones visuelles, dix ennemis ordinaires et un boss, 14 objets (dont consommables), six passifs par classe, deux secrets et un sanctuaire. Le mode développeur de l’écran titre permet d’aller directement dans chaque zone, d’ajouter un niveau/objet et de lancer un combat choisi. Il ne contient pas encore une campagne complète équilibrée ou des portes de zone bloquantes, un remappage des touches, un mixage audio (le volume est enregistré mais aucun son n’est livré), ni une vérification matérielle des manettes. Les chemins persistants sont enregistrés par achievement, mais ne pilotent pas encore des portes spécifiques. Les builds Windows nécessitent une machine disposant des dépendances npm et n’ont pas été signés. Aucun backend ni accès réseau n’est nécessaire à l’exécution ; les ressources visuelles et audio sont dessinées/absentes.
+Ce premier prototype contient deux personnages, cinq zones aux environnements distincts, dix ennemis ordinaires et un boss, 14 objets (dont consommables), six passifs par classe, deux secrets et un sanctuaire. Le mode développeur de l’écran titre permet d’aller directement dans chaque zone, d’ajouter un niveau/objet et de lancer un combat choisi. Il ne contient pas encore une campagne complète équilibrée ou des portes de zone bloquantes, un remappage des touches, un mixage audio (le volume est enregistré mais aucun son n’est livré), ni une vérification matérielle des manettes. Les chemins persistants sont enregistrés par achievement, mais ne pilotent pas encore des portes spécifiques. Les builds Windows nécessitent une machine disposant des dépendances npm et n’ont pas été signés. Aucun backend ni accès réseau n’est nécessaire à l’exécution ; les ressources visuelles et audio sont dessinées/absentes.
 
 Les tests automatisés couvrent les règles déterministes ; l’intégration Electron, l’accessibilité réelle à la manette et l’exécution native Windows doivent encore être vérifiées sur la machine cible.

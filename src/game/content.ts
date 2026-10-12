@@ -80,12 +80,12 @@ export const PASSIVES: PassiveDefinition[] = [
 ];
 
 export const ZONES = [
-  { id: 'meadow', name: 'Prairie oubliée', level: 1, enemies: ['slime', 'rat', 'bandit', 'wolf'], bounds: { x: 0, y: 0, w: 520, h: 360 }, color: 0x315d4a },
-  { id: 'crypt', name: 'Crypte brisée', level: 4, enemies: ['skeleton', 'cultist', 'golem', 'wisp'], bounds: { x: 520, y: 0, w: 520, h: 360 }, color: 0x464b61 },
-  { id: 'ashen', name: 'Terres cendrées', level: 8, enemies: ['knight', 'drake', 'wisp', 'golem'], bounds: { x: 0, y: 360, w: 1040, h: 360 }, color: 0x68483f },
+  { id: 'meadow', name: 'Prairie oubliée', level: 1, enemies: ['slime', 'rat', 'bandit', 'wolf'], color: 0x4f8f4a },
+  { id: 'forest', name: 'Forêt sombre', level: 2, enemies: ['wolf', 'bandit', 'rat', 'slime'], color: 0x25603a },
+  { id: 'marsh', name: 'Marais brumeux', level: 3, enemies: ['slime', 'rat', 'wisp', 'cultist'], color: 0x4a6b55 },
+  { id: 'crypt', name: 'Crypte brisée', level: 4, enemies: ['skeleton', 'cultist', 'golem', 'wisp'], color: 0x5a5d78 },
+  { id: 'ashen', name: 'Terres cendrées', level: 8, enemies: ['knight', 'drake', 'wisp', 'golem'], color: 0x7a4a3a },
 ] as const;
-
-export const FINAL_BOSS_POSITION = { x: 915, y: 610 };
 
 export const validateContent = (): string[] => {
   const errors: string[] = [];
@@ -124,10 +124,7 @@ export const validateContent = (): string[] => {
     if (!enemyIds.has(enemyId)) errors.push(`${zone.id}: ennemi inconnu ${enemyId}.`);
   }
   for (const zone of ZONES) {
-    const bounds = Object.values(zone.bounds);
-    if (bounds.some((value) => !Number.isFinite(value)) || zone.bounds.w <= 0 || zone.bounds.h <= 0 || zone.level < 1) {
-      errors.push(`${zone.id}: limites ou niveau de zone invalide.`);
-    }
+    if (!Number.isFinite(zone.color) || zone.level < 1) errors.push(`${zone.id}: couleur ou niveau de zone invalide.`);
   }
   for (const achievement of ACHIEVEMENTS) {
     if ('unlocks' in achievement) for (const id of achievement.unlocks) {

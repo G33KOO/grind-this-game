@@ -98,6 +98,7 @@ export interface RunState {
   defeatedBosses: string[];
   secrets: string[];
   usedShrines: string[];
+  explored?: string;
   kills: number;
   victories: number;
   result: 'active' | 'victory' | 'death';

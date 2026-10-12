@@ -1,4 +1,5 @@
 import { ACHIEVEMENTS, BALANCE, ENEMIES, HEROES, ITEMS, PASSIVES, ZONES } from './content';
+import { WORLD_START } from './world';
 import type { CombatState, Effect, HeroId, ItemDefinition, ItemInstance, Profile, RunState, Slot, Stats } from './types';
 
 export const clamp = (value: number, min: number, max: number): number =>
@@ -21,7 +22,7 @@ export function newRun(hero: HeroId, seed = 0x71a9c3): RunState {
   const start = HEROES[hero];
   return {
     version: 2, developerMode: false, hero, level: 1, xp: 0, xpToNext: 60, unspentPoints: 0, invested: {},
-    hp: start.stats.maxHp, position: { x: 100, y: 160 }, encounterMeter: 0, distanceSinceEncounterCheck: 0, rngState: seed >>> 0 || 1,
+    hp: start.stats.maxHp, position: { ...WORLD_START }, encounterMeter: 0, distanceSinceEncounterCheck: 0, rngState: seed >>> 0 || 1,
     inventory: [
       { instanceId: 'starter-weapon', itemId: start.startingItem },
       { instanceId: 'starter-potion', itemId: 'small-potion' },

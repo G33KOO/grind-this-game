@@ -8,10 +8,10 @@ import {
 } from '../game/engine';
 import { loadProfile, loadRun, loadSettings, saveProfile, saveRun, saveSettings, type Settings } from '../game/save';
 import { PlatformScene, type MapCallbacks } from '../game/PlatformScene';
+import { ZONE_SHAPES, zoneAt } from '../game/world';
 import type { CombatState, HeroId, Profile, RunState } from '../game/types';
 
 type Screen = 'title' | 'world' | 'combat' | 'inventory' | 'stats' | 'settings' | 'summary';
-const zoneAt = (x: number, y: number) => ZONES.find((zone) => x >= zone.bounds.x && x < zone.bounds.x + zone.bounds.w && y >= zone.bounds.y && y < zone.bounds.y + zone.bounds.h) ?? ZONES[0];
 const percentage = (value: number, max: number) => `${Math.max(0, Math.min(100, Math.round(value / Math.max(1, max) * 100)))}%`;
 
 export function App() {
@@ -29,6 +29,7 @@ export function App() {
   const [device, setDevice] = useState<'keyboard' | 'gamepad'>('keyboard');
   const [pause, setPause] = useState(false);
   const [developmentMode, setDevelopmentMode] = useState(false);
+  const [developerToolsOpen, setDeveloperToolsOpen] = useState(false);
   const [devItem, setDevItem] = useState(ITEMS[0].id);
   const [devEnemy, setDevEnemy] = useState(ENEMIES[0].id);
   const [notice, setNotice] = useState('');
@@ -174,6 +175,10 @@ export function App() {
         }
       },
       event: onMapEvent,
+      ready: (scene) => { if (gameRef.current === game) sceneRef.current = scene; },
+      explored: (data) => {
+        if (runRef.current) runRef.current = { ...runRef.current, explored: data };
+      },
       control: setDevice,
       canEnterZone: (zoneId) => {
         const zone = ZONES.find((entry) => entry.id === zoneId);
@@ -181,6 +186,7 @@ export function App() {
           profileRef.current.paths.includes('ashen-path'));
       },
     };
+    const worldScene = new PlatformScene(callbacks, run.position, HEROES[run.hero].color, run.explored);
     const game = new Phaser.Game({
       type: Phaser.CANVAS,
       parent: 'game-canvas',
@@ -190,10 +196,9 @@ export function App() {
       scale: { mode: Phaser.Scale.RESIZE, autoCenter: Phaser.Scale.CENTER_BOTH },
       physics: { default: 'arcade', arcade: { debug: false } },
       input: { gamepad: true },
-      scene: [new PlatformScene(callbacks, run.position, HEROES[run.hero].color)],
+      scene: [worldScene],
     });
     gameRef.current = game;
-    sceneRef.current = game.scene.getScene('world') as PlatformScene;
     return () => {
       game.destroy(true);
       gameRef.current = null;
@@ -392,38 +397,48 @@ export function App() {
 
   return <main className="shell game-shell">
     <header className="topbar">
-      <button className="wordmark" disabled={screen === 'combat'} onClick={() => setScreen('title')}>G/T/G</button>
-      <div><strong>{HEROES[run.hero].name}</strong><span className="muted"> · Niv. {run.level} · {zoneAt(run.position.x, run.position.y).name}</span></div>
-      <nav>
-        <button disabled={screen === 'combat'} onClick={openInventory}>Inventaire <kbd>I</kbd></button>
-        <button disabled={screen === 'combat'} onClick={() => { if (run.pendingPassivePicks > 0) setPassiveOffers(passiveChoices(run, profile)); setScreen('stats'); sceneRef.current?.togglePause(true); }}>Personnage <kbd>C</kbd></button>
-        <button disabled={screen === 'combat'} onClick={() => setScreen('settings')}>Options</button>
-        <button onClick={() => setPause((value) => !value)}>{pause ? 'Reprendre' : 'Pause'} <kbd>Échap</kbd></button>
+      <div className="hud-player">
+        <button className="wordmark" aria-label="Retour au menu" title="Menu" disabled={screen === 'combat'} onClick={() => setScreen('title')}>G</button>
+        <div className="hud-details">
+          <div className="hud-identity"><strong>{HEROES[run.hero].name}</strong><span>NIV. {run.level}</span></div>
+          <div className="hud-vitals">
+            <div className="hud-meter" aria-label={`Vie : ${run.hp} sur ${stats?.maxHp ?? 0}`}>
+              <span>PV</span><div className="meter hp"><i style={{ width: percentage(run.hp, stats?.maxHp ?? 1) }} /></div><small>{run.hp}</small>
+            </div>
+            <div className="hud-meter" aria-label={`Expérience : ${run.xp} sur ${run.xpToNext}`}>
+              <span>XP</span><div className="meter xp"><i style={{ width: percentage(run.xp, run.xpToNext) }} /></div><small>{run.xp}/{run.xpToNext}</small>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div className="world-location">{zoneAt(run.position.x, run.position.y).name}</div>
+      <nav aria-label="Menu du jeu">
+        <button aria-label="Inventaire" title="Inventaire (I)" disabled={screen === 'combat'} onClick={openInventory}><span aria-hidden="true">▣</span><kbd>I</kbd></button>
+        <button aria-label="Personnage" title="Personnage (C)" disabled={screen === 'combat'} onClick={() => { if (run.pendingPassivePicks > 0) setPassiveOffers(passiveChoices(run, profile)); setScreen('stats'); sceneRef.current?.togglePause(true); }}><span aria-hidden="true">✦</span><kbd>C</kbd></button>
+        <button aria-label="Options" title="Options" disabled={screen === 'combat'} onClick={() => setScreen('settings')}><span aria-hidden="true">⚙</span></button>
+        <button aria-label={pause ? 'Reprendre' : 'Mettre en pause'} title={pause ? 'Reprendre (Échap)' : 'Pause (Échap)'} onClick={() => setPause((value) => !value)}><span aria-hidden="true">{pause ? '▶' : 'Ⅱ'}</span></button>
       </nav>
     </header>
-    <section className="status-strip">
-      <div><span>VIE</span><strong>{run.hp} / {stats?.maxHp}</strong><div className="meter hp"><i style={{ width: percentage(run.hp, stats?.maxHp ?? 1) }} /></div></div>
-      <div><span>EXPÉRIENCE · NIVEAU {run.level}</span><strong>{run.xp} / {run.xpToNext} XP</strong><div className="meter xp"><i style={{ width: percentage(run.xp, run.xpToNext) }} /></div></div>
-      <div><span>RENCONTRE</span><strong>{Math.round(run.encounterMeter * 100)} %</strong><div className="meter encounter"><i style={{ width: percentage(run.encounterMeter, 1) }} /></div></div>
-    </section>
-    <section className={`stage ${screen === 'world' ? '' : 'stage-hidden'}`} aria-label="Carte du monde">
+    <section className={`stage ${screen === 'summary' ? 'stage-hidden' : ''}`} aria-label="Carte du monde">
       <div id="game-canvas" />
       {screen !== 'world' && <div className="stage-veil" />}
       {screen === 'world' && notice && <div className="floating-notice">{notice}<button onClick={() => setNotice('')} aria-label="Fermer">×</button></div>}
-      {screen === 'world' && <div className="map-legend">Clavier : WASD / ZQSD / flèches · {device === 'gamepad' ? 'Manette détectée' : 'Manette : stick / croix'} · Espace : pause</div>}
-      {screen === 'world' && developmentMode && <div className="dev-tools">
-        <strong>MODE DÉVELOPPEUR</strong>
-        <div>{ZONES.map((zone, index) => <button key={zone.id} onClick={() => {
-          const spots = [{ x: 100, y: 160 }, { x: 700, y: 220 }, { x: 120, y: 430 }];
-          const position = spots[index];
-          persistRun({ ...run, position });
-          sceneRef.current?.teleport(position.x, position.y);
-        }}>Aller : {zone.name}</button>)}</div>
-        <div><button onClick={() => persistRun({ ...run, level: run.level + 1, unspentPoints: run.unspentPoints + 2, xpToNext: Math.round(60 + run.level * 24) })}>Niveau +1</button>
-          <select aria-label="Objet de test" value={devItem} onChange={(event) => setDevItem(event.target.value)}>{ITEMS.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select>
-          <button onClick={() => persistRun({ ...run, inventory: [...run.inventory, { instanceId: `dev-${++devItemCount.current}`, itemId: devItem }] })}>Ajouter objet</button></div>
-        <div><select aria-label="Monstre de test" value={devEnemy} onChange={(event) => setDevEnemy(event.target.value)}>{ENEMIES.map((enemy) => <option key={enemy.id} value={enemy.id}>{enemy.name}</option>)}</select>
-          <button onClick={() => launchCombat([devEnemy])}>Lancer combat</button></div>
+      {screen === 'world' && <div className="map-legend"><span>{device === 'gamepad' ? 'Manette détectée' : 'WASD · ZQSD · Flèches'}</span><span>Pause : Échap</span></div>}
+      {screen === 'world' && developmentMode && <div className={`dev-tools ${developerToolsOpen ? 'is-open' : ''}`}>
+        <button className="dev-tools-toggle" aria-expanded={developerToolsOpen} onClick={() => setDeveloperToolsOpen((open) => !open)}>DEV {developerToolsOpen ? '−' : '+'}</button>
+        {developerToolsOpen && <>
+          <div>{ZONES.map((zone) => <button key={zone.id} onClick={() => {
+            const shape = ZONE_SHAPES[zone.id];
+            const position = { x: shape.x + 90, y: shape.y + 40 };
+            persistRun({ ...run, position });
+            sceneRef.current?.teleport(position.x, position.y);
+          }}>Aller : {zone.name}</button>)}</div>
+          <div><button onClick={() => persistRun({ ...run, level: run.level + 1, unspentPoints: run.unspentPoints + 2, xpToNext: Math.round(60 + run.level * 24) })}>Niveau +1</button>
+            <select aria-label="Objet de test" value={devItem} onChange={(event) => setDevItem(event.target.value)}>{ITEMS.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select>
+            <button onClick={() => persistRun({ ...run, inventory: [...run.inventory, { instanceId: `dev-${++devItemCount.current}`, itemId: devItem }] })}>Ajouter objet</button></div>
+          <div><select aria-label="Monstre de test" value={devEnemy} onChange={(event) => setDevEnemy(event.target.value)}>{ENEMIES.map((enemy) => <option key={enemy.id} value={enemy.id}>{enemy.name}</option>)}</select>
+            <button onClick={() => launchCombat([devEnemy])}>Lancer combat</button></div>
+        </>}
       </div>}
     </section>
 
@@ -505,7 +520,6 @@ export function App() {
         void saveRun(null).catch((saveError: unknown) => setError(saveError instanceof Error ? saveError.message : 'Échec de sauvegarde.'));
       }}>Nouvelle partie</button>
     </section>}
-    <footer className="footer"><span>Prototype v0.1 · {window.gamePlatform?.isDesktop ? 'Application desktop' : 'Navigateur'}</span><span>Profil : {profile.achievements.length} succès internes</span></footer>
     {error && <div className="toast error">{error}<button onClick={() => setError('')}>×</button></div>}
     <p className="sr-only">Commandes : flèches pour naviguer, Entrée pour valider, Échap pour fermer ou mettre en pause.</p>
   </main>;
