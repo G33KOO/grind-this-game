@@ -1,0 +1,27 @@
+.title-screen > .space-backdrop { position: fixed; inset: 0; z-index: 0; overflow: hidden; pointer-events: none; background: radial-gradient(ellipse at 70% 25%, #0c132e, #030810 70%); }
+.main-menu-screen .title-grid { display: none; }
+.space-nebula { position: absolute; width: 90vmax; height: 70vmax; border-radius: 50%; mix-blend-mode: screen; }
+.nebula-cyan { left: -40%; top: -65%; background: radial-gradient(ellipse, #127f7840, #16536818 35%, transparent 65%); animation: nebula-drift 22s ease-in-out infinite alternate; }
+.nebula-violet { right: -45%; bottom: -55%; background: radial-gradient(ellipse, #58429b38, #27337718 35%, transparent 65%); animation: nebula-drift 28s ease-in-out infinite alternate-reverse; }
+.space-dust { position: absolute; inset: -30%; background: radial-gradient(ellipse at 15% 65%, #327a9520, transparent 38%), radial-gradient(ellipse at 85% 20%, #724a8a18, transparent 32%); transform: rotate(-25deg); animation: dust-drift 35s ease-in-out infinite alternate; }
+.space-starfield { position: absolute; inset: -8%; animation: starfield-drift 32s ease-in-out infinite alternate; }
+.space-star { position: absolute; width: var(--star-size); height: var(--star-size); border-radius: 50%; background: #c4e9ff; opacity: var(--star-opacity); box-shadow: 0 0 5px #9fdef966; animation: star-twinkle var(--twinkle-time) ease-in-out infinite alternate; }
+.space-star:nth-child(4n) { background: #70ddcd; }
+.space-star:nth-child(7n) { background: #b8a2ed; }
+.space-orbit { position: absolute; border: 1px solid #70cedb12; border-radius: 50%; width: 95vmax; height: 38vmax; left: -60vmax; top: 15%; transform: rotate(-35deg); }
+.space-orbit::after { content: ''; position: absolute; top: 25%; right: 8%; width: 4px; height: 4px; background: #84e8da; border-radius: 50%; box-shadow: 0 0 16px #2ee6c899; }
+.orbit-one { animation: orbit-drift 30s ease-in-out infinite alternate; }
+.orbit-two { left: auto; right: -68vmax; top: -20%; border-color: #9884dd14; animation: orbit-drift 40s ease-in-out infinite alternate-reverse; }
+.space-meteors { position: absolute; inset: 0; }
+.space-meteors i { position: absolute; left: 12%; top: 12%; width: 130px; height: 1px; opacity: 0; background: linear-gradient(90deg, transparent, #8adfc988); transform: rotate(28deg); animation: meteor-pass 11s linear infinite; }
+.space-meteors i:nth-child(2) { left: 68%; top: 8%; width: 95px; animation-duration: 15s; animation-delay: -5s; background: linear-gradient(90deg, transparent, #b3b1ec77); }
+.space-meteors i:nth-child(3) { left: 5%; top: 65%; width: 75px; animation-duration: 19s; animation-delay: -12s; }
+.space-vignette { position: absolute; inset: 0; background: radial-gradient(ellipse at center, #03081077 0, #03081044 28%, transparent 55%, #02050c88 100%); }
+@keyframes nebula-drift { to { transform: translate(9vw, 7vh) rotate(12deg) scale(1.16); } }
+@keyframes dust-drift { to { transform: translate(-5vw, 4vh) rotate(-18deg); opacity: .55; } }
+@keyframes starfield-drift { to { transform: translate(2.5%, 1.5%) scale(1.03); } }
+@keyframes star-twinkle { from { opacity: calc(var(--star-opacity) * .45); } to { opacity: var(--star-opacity); } }
+@keyframes orbit-drift { to { transform: rotate(-25deg) translate(3vw, 2vh); } }
+@keyframes meteor-pass { 0%, 82% { opacity: 0; transform: translate(0, 0) rotate(28deg); } 84% { opacity: .55; } 94% { opacity: 0; transform: translate(260px, 138px) rotate(28deg); } 100% { opacity: 0; transform: translate(260px, 138px) rotate(28deg); } }
+:root[data-motion='reduced'] .space-backdrop * { animation: none !important; }
+@media (prefers-reduced-motion: reduce) { .space-backdrop * { animation: none !important; } }

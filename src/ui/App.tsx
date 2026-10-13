@@ -3,24 +3,31 @@ import Phaser from 'phaser';
 import { ACHIEVEMENTS, BALANCE, ENEMIES, HEROES, ITEMS, PASSIVES, ZONES, masteryLevelsForRank, masteryRank, MASTERY_MAX_RANK } from '../game/content';
 import {
   addAchievements, advanceEncounter, allocatePoints, applyProgress, choosePassive, deriveStats,
-  equipItem, gainExperience, initialProfile, itemForInstance, newRun, passiveChoices, resolveLoadout, rollEncounter,
-  respecStats, rollLoot, slotForItem, startCombat, stepCombat, useConsumable,
+  gainExperience, initialProfile, newRun, passiveChoices, resolveLoadout, rollEncounter,
+  respecStats, rollLoot, startCombat, stepCombat,
 } from '../game/engine';
 import type { Loadout } from '../game/engine';
 import { DEFAULT_SETTINGS, loadProfile, loadRun, loadSettings, saveProfile, saveRun, saveSettings, type Settings } from '../game/save';
-import { SettingsBody } from './SettingsBody';
+import { SettingsPage } from './SettingsPage';
 import { NeonLogo } from './NeonLogo';
 import { HERO_NEON, PlatformScene, type MapCallbacks, type MapEvent } from '../game/PlatformScene';
 import { ZONE_SHAPES, zoneAt } from '../game/world';
 import { BattleScene } from './BattleScene';
 import { CombatRecap, type CombatRecapData } from './CombatRecap';
-import { HERO_ACCENT, HeroGlyph, ItemIcon, RARITIES, passiveRarity, type Rarity } from './icons';
+import { HERO_ACCENT, ItemIcon, RARITIES, passiveRarity } from './icons';
 import { LoadoutPage } from './LoadoutPage';
+import { ZoneLoot } from './ZoneLoot';
+import { InventoryPage } from './InventoryPage';
+import { ClassDetailsPage } from './ClassDetailsPage';
+import { AchievementsPage } from './AchievementsPage';
+import { BestiaryPage } from './BestiaryPage';
+import { SpaceBackdrop } from './SpaceBackdrop';
+import { HeroPortrait, HeroIdentity, MenuIcon, MenuFooter, StatIcon } from './GameVisuals';
 
 
 import type { CombatState, HeroId, Profile, RunState } from '../game/types';
 
-type Screen = 'title' | 'world' | 'combat' | 'inventory' | 'stats' | 'settings' | 'achievements' | 'summary';
+type Screen = 'title' | 'world' | 'combat' | 'inventory' | 'stats' | 'settings' | 'achievements' | 'summary' | 'loot';
 const percentage = (value: number, max: number) => `${Math.max(0, Math.min(100, Math.round(value / Math.max(1, max) * 100)))}%`;
 
 export function App() {
@@ -33,7 +40,7 @@ export function App() {
   const [screen, setScreen] = useState<Screen>('title');
   const [newRunSelection, setNewRunSelection] = useState(false);
   const [confirmAbandon, setConfirmAbandon] = useState(false);
-  const [titlePanel, setTitlePanel] = useState<'settings' | 'achievements' | null>(null);
+  const [titlePanel, setTitlePanel] = useState<'settings' | 'achievements' | 'bestiary' | null>(null);
   const [heroDetail, setHeroDetail] = useState<HeroId | null>(null);
   const [loadoutHero, setLoadoutHero] = useState<HeroId | null>(null);
   const [worldReady, setWorldReady] = useState(false);
@@ -352,10 +359,19 @@ export function App() {
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
-        if (screen !== 'title' && screen !== 'summary' && screen !== 'combat') setScreen('world');
+        if (confirmAbandon) { setConfirmAbandon(false); return; }
+        if (screen === 'title') {
+          if (loadoutHero) setLoadoutHero(null);
+          else if (heroDetail) setHeroDetail(null);
+          else if (titlePanel) setTitlePanel(null);
+          else setNewRunSelection(false);
+          return;
+        }
+        if (screen !== 'summary' && screen !== 'combat') setScreen('world');
       }
       if (event.code === settings.bindings.inventory && screen === 'world') setScreen('inventory');
       if (event.code === settings.bindings.character && screen === 'world') setScreen('stats');
+      if (event.code === 'KeyL' && screen === 'world') setScreen('loot');
       if (screen === 'combat' && combatRef.current && (event.key === 'Tab' || event.key === 'ArrowRight' || event.key === 'ArrowLeft')) {
         event.preventDefault();
         const alive = combatRef.current.enemies.map((enemy, index) => enemy.currentHp > 0 ? index : -1).filter((index) => index >= 0);
@@ -368,7 +384,29 @@ export function App() {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [screen, settings.bindings.inventory, settings.bindings.character]);
+  }, [screen, confirmAbandon, loadoutHero, heroDetail, titlePanel, settings.bindings.inventory, settings.bindings.character]);
+
+  useEffect(() => {
+    const frame = requestAnimationFrame(() => {
+      if (screen === 'world' || (screen === 'combat' && !recap)) return;
+      const surface = document.querySelector('.confirm-dialog') ?? document.querySelector('.recap-card') ?? document.querySelector('.modal-panel') ?? document.querySelector('main');
+      surface?.querySelector<HTMLElement>('button:not(:disabled), input:not(:disabled), select:not(:disabled)')?.focus({ preventScroll: true });
+    });
+    const trap = (event: KeyboardEvent) => {
+      if (event.key !== 'Tab' || (screen === 'combat' && !recap)) return;
+      const surface = document.querySelector('.confirm-dialog') ?? document.querySelector('.recap-card') ?? document.querySelector('.modal-panel');
+      if (!surface) return;
+      const controls = Array.from(surface.querySelectorAll<HTMLElement>('button:not(:disabled), input:not(:disabled), select:not(:disabled)')).filter((element) => element.getClientRects().length > 0);
+      if (!controls.length) return;
+      const index = controls.indexOf(document.activeElement as HTMLElement);
+      if (index < 0 || (!event.shiftKey && index === controls.length - 1) || (event.shiftKey && index === 0)) {
+        event.preventDefault();
+        controls[event.shiftKey ? controls.length - 1 : 0].focus();
+      }
+    };
+    window.addEventListener('keydown', trap);
+    return () => { cancelAnimationFrame(frame); window.removeEventListener('keydown', trap); };
+  }, [screen, titlePanel, loadoutHero, heroDetail, newRunSelection, confirmAbandon, !!recap]);
 
   useEffect(() => {
     const timer = window.setInterval(() => {
@@ -378,7 +416,8 @@ export function App() {
       const up = !!(pad.buttons[12]?.pressed);
       const down = !!(pad.buttons[13]?.pressed);
       if ((up && !padButtonsRef.current.up) || (down && !padButtonsRef.current.down)) {
-        const buttons = Array.from(document.querySelectorAll<HTMLButtonElement>('button:not(:disabled)'));
+        const surface = document.querySelector('.confirm-dialog') ?? document.querySelector('.recap-card') ?? document.querySelector('.modal-panel') ?? document;
+        const buttons = Array.from(surface.querySelectorAll<HTMLButtonElement>('button:not(:disabled)')).filter((button) => button.getClientRects().length > 0);
         const current = buttons.indexOf(document.activeElement as HTMLButtonElement);
         const shift = down ? 1 : -1;
         buttons[(current + shift + buttons.length) % buttons.length]?.focus();
@@ -443,96 +482,60 @@ export function App() {
   }
 
   if ((!run || screen === 'title') && heroDetail) {
-    return <main className="shell title-screen classes-page">
-      <div className="title-grid" aria-hidden="true" />
-      <header className="classes-head">
-        <button onClick={() => setHeroDetail(null)}>← Retour</button>
-        <h2>Classes</h2>
-      </header>
-      <div className="classes-layout">
-        <nav className="classes-list" aria-label="Liste des classes">
-          {(['warrior', 'assassin'] as const).map((hero) => {
-            const rank = masteryRank(profile.mastery[hero] ?? 0);
-            return <button key={hero} className={`class-chip ${hero === heroDetail ? 'is-selected' : ''}`} aria-pressed={hero === heroDetail} style={{ ['--accent' as string]: HERO_ACCENT[hero] }} onClick={() => setHeroDetail(hero)}>
-              <span className="hero-icon"><HeroGlyph hero={hero} size={26} /></span>
-              <span className="chip-body"><strong>{HEROES[hero].name}</strong><small>Maîtrise {rank}/{MASTERY_MAX_RANK}</small></span>
-            </button>;
-          })}
-        </nav>
-        <section className="panel classes-detail" style={{ ['--accent' as string]: HERO_ACCENT[heroDetail] }}>
-          <PanelHeading label="CLASSE" title={HEROES[heroDetail].name} />
-          <ClassDetails hero={heroDetail} profile={profile} />
-        </section>
-      </div>
-    </main>;
+    return <ClassDetailsPage hero={heroDetail} profile={profile} onHero={setHeroDetail} onBack={() => setHeroDetail(null)} />;
   }
 
-  if ((!run || screen === 'title') && titlePanel) {
-    const isSettings = titlePanel === 'settings';
-    return <main className="shell title-screen classes-page">
-      <div className="title-grid" aria-hidden="true" />
-      <header className="classes-head">
-        <button onClick={() => setTitlePanel(null)}>← Retour</button>
-        <h2>{isSettings ? 'Paramètres' : 'Succès'}</h2>
-      </header>
-      <section className="panel page-panel">
-        {isSettings ? <SettingsBody settings={settings} setSettings={setSettings} /> : <AchievementList profile={profile} />}
-      </section>
+  if ((!run || screen === 'title') && titlePanel === 'achievements') {
+    return <AchievementsPage profile={profile} onBack={() => setTitlePanel(null)} />;
+  }
+
+  if ((!run || screen === 'title') && titlePanel === 'bestiary') {
+    return <BestiaryPage profile={profile} onBack={() => setTitlePanel(null)} />;
+  }
+
+  if ((!run || screen === 'title') && titlePanel === 'settings') {
+    return <SettingsPage settings={settings} setSettings={setSettings} onBack={() => setTitlePanel(null)} />;
+  }
+
+  if ((!run || screen === 'title') && newRunSelection) {
+    return <main className="shell title-screen classes-page class-selection-page">
+      <SpaceBackdrop />
+      <div className="class-selection-heading"><p className="eyebrow">NOUVELLE PARTIE</p><h1>Choisissez votre voie</h1></div>
+      <div className="class-selection-cards">{(['warrior', 'assassin'] as const).map((hero) => <article className="class-choice-option" key={hero} style={{ ['--accent' as string]: HERO_ACCENT[hero] }}>
+        <button className="class-choice" aria-label={`Choisir ${HEROES[hero].name}`} onClick={() => setLoadoutHero(hero)}>
+          <HeroPortrait hero={hero} /><div className="class-choice-body"><h2>{HEROES[hero].name}</h2>
+          <MasterySegments levels={profile.mastery[hero]} /></div>
+        </button>
+        <button className="class-details-link" aria-label={`Details du ${HEROES[hero].name}`} onClick={() => setHeroDetail(hero)}>Details</button>
+      </article>)}</div>
+      <div className="class-selection-bottom">{run?.result === 'active' && <p className="small-note">La partie actuelle sera remplacée lorsque vous commencerez la nouvelle.</p>}<label className="dev-toggle"><input type="checkbox" checked={developmentMode} onChange={(event) => setDevelopmentMode(event.target.checked)} /> Mode développeur · départ niveau 8</label><MenuFooter /><div className="page-bottom-actions"><button onClick={() => setNewRunSelection(false)}>Accueil</button></div></div>
     </main>;
   }
 
   if (!run || screen === 'title') {
-    return <main className="shell title-screen">
+    return <main className="shell title-screen main-menu-screen">
       <div className="title-grid" aria-hidden="true" />
-      <NeonLogo size={110} />
-      <h1 className="wordmark-title"><span>GRIND</span><small>IT</small></h1>
-      {error && <div className="notice error">{error}</div>}
-      {run?.result === 'active' && !newRunSelection && <div className="title-actions">
-        <button className="primary" onClick={() => setScreen('world')}>Reprendre la partie</button>
-        <button onClick={() => setNewRunSelection(true)}>Nouvelle partie</button>
-        <button className="danger" onClick={() => setConfirmAbandon(true)}>Abandonner la partie</button>
-      </div>}
+      <SpaceBackdrop />
+      <section className="main-menu-content">
+        <div className="main-menu-brand"><NeonLogo size={140} /></div>
+        <h1 className="wordmark-title"><span>GRIND</span><small>IT</small></h1>
+        {error && <div className="notice error">{error}</div>}
+        <nav className="main-menu-actions" aria-label="Menu principal">
+          {run?.result === 'active' && <button className="main-menu-button" onClick={() => setScreen('world')}><span>Continuer</span></button>}
+          <button className="main-menu-button" onClick={() => setNewRunSelection(true)}><span>Nouvelle partie</span></button>
+          <button className="main-menu-button" onClick={() => setTitlePanel('achievements')}><span>Succès</span></button>
+          <button className="main-menu-button" onClick={() => setTitlePanel('bestiary')}><span>Bestiaire</span></button>
+          <button className="main-menu-button" onClick={() => setTitlePanel('settings')}><span>Options</span></button>
+          {run?.result === 'active' && <button className="main-menu-button" onClick={() => setConfirmAbandon(true)}><span>Abandonner la partie</span></button>}
+          <button className="main-menu-button" onClick={() => window.close()}><span>Quitter</span></button>
+        </nav>
+      </section>
       {confirmAbandon && <div className="confirm-backdrop" role="presentation" onClick={() => setConfirmAbandon(false)}>
         <div className="confirm-dialog" role="alertdialog" aria-modal="true" aria-labelledby="confirm-title" onClick={(event) => event.stopPropagation()}>
-          <span className="confirm-kicker">ATTENTION</span>
-          <h3 id="confirm-title">Abandonner la partie ?</h3>
-          <p>La progression de cette partie sera perdue. Les succès et la maîtrise sont conservés.</p>
-          <div className="confirm-actions">
-            <button autoFocus onClick={() => setConfirmAbandon(false)}>Annuler</button>
-            <button className="danger" onClick={() => { setConfirmAbandon(false); abandonRun(); }}>Abandonner</button>
-          </div>
+          <span className="confirm-kicker">ATTENTION</span><h3 id="confirm-title">Abandonner la partie ?</h3><p>La progression de cette partie sera perdue. Les succès et la maîtrise sont conservés.</p>
+          <div className="confirm-actions"><button autoFocus onClick={() => setConfirmAbandon(false)}>Annuler</button><button className="danger" onClick={() => { setConfirmAbandon(false); abandonRun(); }}>Abandonner</button></div>
         </div>
       </div>}
-      {(!run || run.result !== 'active' || newRunSelection) && <div className="hero-picks">
-        {(['warrior', 'assassin'] as const).map((hero) => <button key={hero} className="hero-card" style={{ ['--accent' as string]: HERO_ACCENT[hero] }} onClick={() => setLoadoutHero(hero)}>
-          <span className="hero-icon"><HeroGlyph hero={hero} size={26} /></span>
-          <strong>{HEROES[hero].name}</strong>
-          <span>{hero === 'warrior' ? 'Défense, boucliers et endurance.' : 'Vitesse, critiques et poison.'}</span>
-          <small>{HEROES[hero].stats.maxHp} PV · {HEROES[hero].stats.speed.toFixed(2)} vitesse</small>
-        </button>)}
-      </div>}
-      {run?.result === 'active' && newRunSelection && <button onClick={() => setNewRunSelection(false)}>Annuler et reprendre la sauvegarde</button>}
-      {(!run || run.result !== 'active' || newRunSelection) && <label className="dev-toggle"><input type="checkbox" checked={developmentMode} onChange={(event) => setDevelopmentMode(event.target.checked)} /> Mode développeur : départ niveau 8</label>}
-      <div className="class-strip">
-        {(['warrior', 'assassin'] as const).map((hero) => {
-          const levels = profile.mastery[hero] ?? 0;
-          const rank = masteryRank(levels);
-          const floor = rank === 0 ? 0 : masteryLevelsForRank(rank);
-          const next = rank >= MASTERY_MAX_RANK ? floor : masteryLevelsForRank(rank + 1);
-          const ratio = next === floor ? 1 : (levels - floor) / (next - floor);
-          return <button key={hero} className="class-chip" style={{ ['--accent' as string]: HERO_ACCENT[hero] }} onClick={() => setHeroDetail(hero)} aria-label={`Détails de la classe ${HEROES[hero].name}`}>
-            <span className="hero-icon"><HeroGlyph hero={hero} size={26} /></span>
-            <span className="chip-body"><strong>{HEROES[hero].name}</strong><small>Maîtrise {rank}/{MASTERY_MAX_RANK}</small>
-              <span className="mastery-track"><i style={{ width: `${Math.round(ratio * 100)}%` }} /></span></span>
-            <span className="chip-more">Détails</span>
-          </button>;
-        })}
-      </div>
-      <div className="title-menu">
-        <button onClick={() => setTitlePanel('achievements')}>Succès · {profile.achievements.length}/{ACHIEVEMENTS.length}</button>
-        <button onClick={() => setTitlePanel('settings')}>Paramètres</button>
-        <button onClick={() => window.close()}>Quitter</button>
-      </div>
     </main>;
   }
 
@@ -541,7 +544,7 @@ export function App() {
       <div className="hud-player">
         <button className="wordmark" aria-label="Retour au menu" data-tip="Retour au menu principal" disabled={screen === 'combat'} onClick={() => setScreen('title')}><NeonLogo size={30} /></button>
         <div className="hud-details">
-          <div className="hud-identity" data-tip="Votre classe et votre niveau"><HeroGlyph hero={run.hero} size={14} /><strong>{HEROES[run.hero].name}</strong><span>NIV. {run.level}</span></div>
+          <div className="hud-identity" data-tip="Votre classe et votre niveau"><HeroPortrait hero={run.hero} className="hud-portrait" /><strong>{HEROES[run.hero].name}</strong><span>NIV. {run.level}</span></div>
           <div className="hud-vitals">
             <div className="hud-meter" data-tip="Points de vie : à 0, la partie est perdue" aria-label={`Vie : ${run.hp} sur ${stats?.maxHp ?? 0}`}>
               <span>PV</span><div className="meter hp"><i style={{ width: percentage(run.hp, stats?.maxHp ?? 1) }} /></div><small>{run.hp}</small>
@@ -553,10 +556,11 @@ export function App() {
         </div>
       </div>
       <nav aria-label="Menu du jeu">
-        <button aria-label="Inventaire" data-tip="Inventaire et équipement (I)" disabled={screen === 'combat'} onClick={openInventory}><span aria-hidden="true">▣</span><kbd>I</kbd></button>
-        <button className={run.unspentPoints + run.pendingPassivePicks > 0 ? 'has-alert' : ''} aria-label={run.unspentPoints + run.pendingPassivePicks > 0 ? `Personnage : ${run.unspentPoints} point(s) à répartir, ${run.pendingPassivePicks} passif(s) à choisir` : 'Personnage'} data-tip={run.unspentPoints + run.pendingPassivePicks > 0 ? `${run.unspentPoints} point(s) à répartir · ${run.pendingPassivePicks} passif(s) à choisir (C)` : 'Statistiques, maîtrise et passifs (C)'} disabled={screen === 'combat'} onClick={() => { if (run.pendingPassivePicks > 0) setPassiveOffers(passiveChoices(run, profile)); setScreen('stats'); sceneRef.current?.togglePause(true); }}><span aria-hidden="true">✦</span><kbd>C</kbd>{run.unspentPoints + run.pendingPassivePicks > 0 && <b className="alert-badge" aria-hidden="true">{run.unspentPoints + run.pendingPassivePicks}</b>}</button>
-        <button aria-label="Succès" data-tip="Succès débloqués et à débloquer" disabled={screen === 'combat'} onClick={() => { setScreen('achievements'); sceneRef.current?.togglePause(true); }}><span aria-hidden="true">★</span></button>
-        <button aria-label="Options" data-tip="Paramètres : volume, vitesse, plein écran" disabled={screen === 'combat'} onClick={() => setScreen('settings')}><span aria-hidden="true">⚙</span></button>
+        <button aria-label="Zones et butins" data-tip="Zones, monstres et probabilités de butin (L)" disabled={screen === 'combat'} onClick={() => setScreen('loot')}><MenuIcon id="loot" /><kbd>L</kbd></button>
+        <button aria-label="Inventaire" data-tip="Inventaire et équipement (I)" disabled={screen === 'combat'} onClick={openInventory}><MenuIcon id="inventory" /><kbd>I</kbd></button>
+        <button className={run.unspentPoints + run.pendingPassivePicks > 0 ? 'has-alert' : ''} aria-label={run.unspentPoints + run.pendingPassivePicks > 0 ? `Personnage : ${run.unspentPoints} point(s) à répartir, ${run.pendingPassivePicks} passif(s) à choisir` : 'Personnage'} data-tip={run.unspentPoints + run.pendingPassivePicks > 0 ? `${run.unspentPoints} point(s) à répartir · ${run.pendingPassivePicks} passif(s) à choisir (C)` : 'Statistiques, maîtrise et passifs (C)'} disabled={screen === 'combat'} onClick={() => { if (run.pendingPassivePicks > 0) setPassiveOffers(passiveChoices(run, profile)); setScreen('stats'); sceneRef.current?.togglePause(true); }}><MenuIcon id="character" /><kbd>C</kbd>{run.unspentPoints + run.pendingPassivePicks > 0 && <b className="alert-badge" aria-hidden="true">{run.unspentPoints + run.pendingPassivePicks}</b>}</button>
+        <button aria-label="Succès" data-tip="Succès débloqués et à débloquer" disabled={screen === 'combat'} onClick={() => { setScreen('achievements'); sceneRef.current?.togglePause(true); }}><MenuIcon id="achievements" /></button>
+        <button aria-label="Options" data-tip="Paramètres : volume, vitesse, plein écran" disabled={screen === 'combat'} onClick={() => setScreen('settings')}><MenuIcon id="settings" /></button>
         <button aria-label={`Vitesse du jeu ×${settings.combatSpeed}`} data-tip={`Vitesse du combat : ×${settings.combatSpeed} (cliquer pour passer à ×${settings.combatSpeed === 1 ? 2 : settings.combatSpeed === 2 ? 4 : 1})`} onClick={() => setSettings({ ...settings, combatSpeed: settings.combatSpeed === 1 ? 2 : settings.combatSpeed === 2 ? 4 : 1 })}><span aria-hidden="true">×{settings.combatSpeed}</span></button>
       </nav>
     </header>
@@ -569,7 +573,7 @@ export function App() {
         <div className="loading-bar" aria-hidden="true"><i /></div>
       </div>}
       {screen !== 'world' && <div className="stage-veil" />}
-      <div className="world-location" aria-label="Zone actuelle">{zoneAt(run.position.x, run.position.y).name}</div>
+      <div className="world-location" aria-label="Zone actuelle">{zoneAt(run.position.x, run.position.y).name} · NIV. {zoneAt(run.position.x, run.position.y).level}</div>
       <div className="encounter-bar" role="progressbar" aria-label="Danger de rencontre"><span>DANGER</span><div className="encounter-track"><i ref={encounterBarRef} /></div></div>
       {screen === 'world' && notice && <div className="floating-notice">{notice}<button onClick={() => setNotice('')} aria-label="Fermer">×</button></div>}
       {screen === 'world' && <div className="map-legend"><span>{device === 'gamepad' ? 'Manette détectée' : 'WASD · ZQSD · Flèches'}</span><span>Vitesse : bouton ×1/×2/×4</span></div>}
@@ -600,35 +604,8 @@ export function App() {
       stats={(['strength', 'speed', 'luck', 'defense', 'maxHp'] as const).map((key) => ({ key, label: statLabel(key) }))}
       onSpend={(key, amount) => pickStat(key as keyof typeof HEROES.warrior.stats, amount)} onContinue={continueAfterCombat} />}
 
-    {screen === 'inventory' && <section className="panel modal-panel">
-      <PanelHeading label="ÉQUIPEMENT" title="Inventaire" onClose={backToWorld} />
-      <div className="equipment-grid">{(['weapon', 'armor', 'charm', 'charm2'] as const).map((slot) => {
-        const equipped = itemForInstance(run, run.equipment[slot]);
-        return <div className={`equipment-slot${equipped ? ` rarity-${equipped.rarity}` : ''}`} key={slot}>
-          <span>{slot === 'weapon' ? 'ARME' : slot === 'armor' ? 'ARMURE' : `ACCESSOIRE ${slot === 'charm' ? '1' : '2'}`}</span>
-          {equipped && <ItemIcon id={equipped.id} rarity={equipped.rarity} size={52} />}
-          <strong className="rarity-text" style={equipped ? { color: RARITIES[equipped.rarity].color } : undefined}>{equipped?.name ?? 'Vide'}</strong>
-        </div>;
-      })}</div>
-      <div className="inventory-list">{run.inventory.map((instance) => {
-        const item = ITEMS.find((entry) => entry.id === instance.itemId);
-        if (!item) return null;
-        const equipped = Object.values(run.equipment).includes(instance.instanceId);
-        const comparison = item.slot === 'consumable' ? '' : compareEquipment(run, instance.instanceId);
-        return <article className={`item-row rarity-${item.rarity}`} key={instance.instanceId}><ItemIcon id={item.id} rarity={item.rarity} /><div><strong style={{ color: RARITIES[item.rarity].color }}>{item.name}</strong> <small className="rarity-tag" style={{ color: RARITIES[item.rarity].color }}>{RARITIES[item.rarity].label}</small><p>{item.description}</p>{comparison && <p className="item-comparison">{comparison}</p>}</div>
-          {item.slot === 'consumable' ? <button disabled={run.hp >= (stats?.maxHp ?? run.hp)} onClick={() => persistRun(useConsumable(run, instance.instanceId))}>Utiliser</button> :
-            <span className="equip-buttons">{equipped ? <>
-              <small>Équipé</small><button onClick={() => {
-                const equipment = Object.fromEntries(Object.entries(run.equipment).filter(([, value]) => value !== instance.instanceId));
-                const updated = { ...run, equipment };
-                updated.hp = Math.min(deriveStats(updated).maxHp, run.hp);
-                persistRun(updated);
-              }}>Retirer</button>
-            </> : (item.slot === 'charm' ? (['charm', 'charm2'] as const) : [slotForItem(instance.itemId)]).filter((slot): slot is 'weapon' | 'armor' | 'charm' | 'charm2' => !!slot).map((slot) => <button key={slot} onClick={() => persistRun(equipItem(run, instance.instanceId, slot))}>Équiper {slot === 'charm2' ? 'accessoire 2' : slot === 'charm' ? 'accessoire 1' : ''}</button>)}</span>}
-        </article>;
-      })}</div>
-      <p className="small-note">Comparaison : les statistiques sont recalculées à partir des objets actuellement équipés. Les objets trouvés ne persistent pas après la partie.</p>
-    </section>}
+    {screen === 'loot' && <ZoneLoot run={run} profile={profile} onClose={backToWorld} />}
+    {screen === 'inventory' && <InventoryPage run={run} onChange={persistRun} onClose={backToWorld} />}
 
     {screen === 'stats' && <section className="panel modal-panel">
       <PanelHeading label={passiveOffers.length ? 'CHOIX DE PASSIF' : 'PERSONNAGE'} title={passiveOffers.length ? `${run.pendingPassivePicks} choix en attente` : 'Statistiques & maîtrise'} onClose={() => { if (!passiveOffers.length) backToWorld(); }} />
@@ -638,7 +615,7 @@ export function App() {
         const rarity = passiveRarity(passive.weight);
         return <button className={`passive-card rarity-${rarity}`} key={id} onClick={() => clickPassive(id)}><ItemIcon id={passive.id} rarity={rarity} size={56} /><small style={{ color: RARITIES[rarity].color }}>{RARITIES[rarity].label.toUpperCase()} · RANG {rank + 1}/{passive.maxRank}</small><strong>{passive.name}</strong><span>{passive.description}</span></button>;
       })}</div> : run.pendingPassivePicks > 0 ? <div className="empty-choice"><p>Aucun passif débloqué disponible pour ce palier.</p><button onClick={() => { const updated = { ...run, pendingPassivePicks: run.pendingPassivePicks - 1 }; persistRun(updated); if (updated.pendingPassivePicks === 0) backToWorld(); }}>Passer ce choix</button></div> :
-        <><div className="stat-grid">{(Object.entries(stats ?? {}) as [string, number][]).map(([key, value]) => <div key={key}><span>{statLabel(key)}</span><strong>{Number.isInteger(value) ? value : value.toFixed(2)}</strong></div>)}</div>
+        <><HeroIdentity hero={run.hero} level={run.level} subtitle="VOTRE BUILD" /><div className="stat-grid">{(Object.entries(stats ?? {}) as [string, number][]).map(([key, value]) => <div key={key}><StatIcon stat={key} /><span>{statLabel(key)}</span><strong>{Number.isInteger(value) ? value : value.toFixed(2)}</strong></div>)}</div>
         {run.unspentPoints > 0 && <div className="points-panel"><strong>{run.unspentPoints} points à répartir</strong>{(['strength', 'speed', 'luck', 'defense', 'maxHp'] as const).map((stat) => <div className="point-row" key={stat}><span>{statLabel(stat)}</span>{Array.from(new Set([1, 5, run.unspentPoints])).map((amount) => <button key={amount} onClick={() => pickStat(stat, amount)}>{amount === run.unspentPoints ? 'Tout' : `+${amount}`}</button>)}</div>)}
           {Object.values(run.invested).some((value) => (value ?? 0) > 0) && <button className="respec-button" onClick={() => persistRun(respecStats(run))}>Réinitialiser les points (gratuit)</button>}
         </div>}
@@ -652,21 +629,15 @@ export function App() {
         </>}
     </section>}
 
-    {screen === 'settings' && <section className="panel modal-panel">
-      <PanelHeading label="PRÉFÉRENCES" title="Options" onClose={backToWorld} />
-      <SettingsBody settings={settings} setSettings={setSettings} />
-    </section>}
+    {screen === 'settings' && <SettingsPage settings={settings} setSettings={setSettings} onBack={backToWorld} inGame />}
 
-    {screen === 'achievements' && <section className="panel modal-panel">
-      <PanelHeading label="PROGRESSION PERMANENTE" title="Succès" onClose={backToWorld} />
-      <AchievementList profile={profile} />
-    </section>}
+    {screen === 'achievements' && <AchievementsPage profile={profile} onBack={backToWorld} inGame />}
 
     {screen === 'summary' && <section className="panel modal-panel summary-panel">
-      <p className="eyebrow">BILAN DE PARTIE</p><h2>{run.result === 'victory' ? 'Victoire !' : 'Fin de partie'}</h2>
+      <HeroPortrait hero={run.hero} className="summary-portrait" /><p className="eyebrow">BILAN DE PARTIE</p><h2>{run.result === 'victory' ? 'Seuil franchi' : 'Le dernier souffle'}</h2>
       <p>{HEROES[run.hero].name} · niveau {run.level} · {run.kills} élimination(s) · {run.victories} combat(s)</p>
       <p>Secrets découverts : {run.secrets.length} · Boss vaincus : {run.defeatedBosses.length}</p>
-      <h3>Objets obtenus</h3><p>{run.inventory.map((instance) => ITEMS.find((item) => item.id === instance.itemId)?.name).filter(Boolean).join(' · ') || 'Aucun objet'}</p>
+      <h3>Objets obtenus</h3><div className="summary-loot">{run.inventory.map((instance) => { const item = ITEMS.find((item) => item.id === instance.itemId); return item ? <span key={instance.instanceId} title={item.name}><ItemIcon id={item.id} rarity={item.rarity} size={48} /><small>{item.name}</small></span> : null; })}</div>
       <h3>Déblocages permanents</h3><p>{profile.achievements.map((id) => ACHIEVEMENTS.find((entry) => entry.id === id)?.name).filter(Boolean).join(' · ') || 'Aucun pour le moment'}</p>
       <button className="primary" onClick={() => {
         syncRun(null); syncCombat(null); setScreen('title');
@@ -674,7 +645,7 @@ export function App() {
       }}>Nouvelle partie</button>
     </section>}
     {error && <div className="toast error">{error}<button onClick={() => setError('')}>×</button></div>}
-    <p className="sr-only">Commandes : flèches pour naviguer, Entrée pour valider, Échap pour fermer.</p>
+    <MenuFooter /><p className="sr-only">Commandes : flèches pour naviguer, Entrée pour valider, Échap pour fermer.</p>
   </main>;
 }
 
@@ -685,6 +656,19 @@ function newRunFor(hero: HeroId, developer: boolean, loadout: Required<Loadout>)
     run = { ...run, developerMode: true, level: 8, xp: 0, xpToNext: 228, unspentPoints: 14 };
   }
   return run;
+}
+
+function MasterySegments({ levels }: { levels: number }) {
+  const rank = masteryRank(levels);
+  const floor = rank === 0 ? 0 : masteryLevelsForRank(rank);
+  const next = masteryLevelsForRank(Math.min(rank + 1, MASTERY_MAX_RANK));
+  const progress = rank >= MASTERY_MAX_RANK ? 0 : Math.max(0, Math.min(1, (levels - floor) / (next - floor)));
+  return <div className="class-mastery">
+    <div className="class-mastery-label"><span>Maîtrise</span><strong>{rank} / {MASTERY_MAX_RANK}</strong></div>
+    <div className="mastery-segments" role="progressbar" aria-label="Maîtrise de la classe" aria-valuemin={0} aria-valuemax={MASTERY_MAX_RANK} aria-valuenow={rank + progress} aria-valuetext={`Maîtrise ${rank} sur ${MASTERY_MAX_RANK}${rank < MASTERY_MAX_RANK ? `, ${Math.round(progress * 100)} % vers le prochain rang` : ', maximum'}`}>
+      {Array.from({ length: MASTERY_MAX_RANK }, (_, index) => <span key={index} className={index < rank ? 'is-complete' : ''} aria-hidden="true"><i style={{ width: `${index < rank ? 100 : index === rank ? progress * 100 : 0}%` }} /></span>)}
+    </div>
+  </div>;
 }
 
 function MasteryPanel({ hero, levels }: { hero: HeroId; levels: number }) {
@@ -702,101 +686,11 @@ function MasteryPanel({ hero, levels }: { hero: HeroId; levels: number }) {
   </div>;
 }
 
-function ClassDetails({ hero, profile }: { hero: HeroId; profile: Profile }) {
-  const definition = HEROES[hero];
-  const rank = masteryRank(profile.mastery[hero] ?? 0);
-  const passives = PASSIVES.filter((passive) => passive.hero === hero)
-    .sort((a, b) => (a.masteryRequired ?? 0) - (b.masteryRequired ?? 0));
-  return <div className="class-details">
-    <p className="small-note">{hero === 'warrior' ? 'Défense, boucliers et endurance.' : 'Vitesse, critiques et poison.'}</p>
-    <h3>Statistiques de départ</h3>
-    <div className="stat-grid">{(Object.entries(definition.stats) as [string, number][]).map(([key, value]) => <div key={key}><span>{statLabel(key)}</span><strong>{Number.isInteger(value) ? value : value.toFixed(2)}</strong></div>)}</div>
-    <MasteryPanel hero={hero} levels={profile.mastery[hero] ?? 0} />
-    <h3>Passifs de classe</h3>
-    <div className="passive-grid">
-      {passives.map((passive) => {
-        const rarity = passiveRarity(passive.weight);
-        const needsRank = passive.masteryRequired !== undefined && rank < passive.masteryRequired;
-        const achievement = passive.unlockAchievement ? ACHIEVEMENTS.find((entry) => entry.id === passive.unlockAchievement) : undefined;
-        const needsAchievement = !!achievement && !profile.achievements.includes(achievement.id);
-        const locked = needsRank || needsAchievement;
-        return <div key={passive.id} className={`reward-tile rarity-${rarity}${locked ? ' locked' : ''}`} style={{ borderColor: RARITIES[rarity].color }}>
-          <ItemIcon id={passive.id} rarity={rarity} size={48} />
-          <div>
-            <small style={{ color: RARITIES[rarity].color }}>{RARITIES[rarity].label} · rang max {passive.maxRank}</small>
-            <strong>{passive.name}</strong><span>{passive.description}</span>
-            <em>{needsRank ? `🔒 Maîtrise ${passive.masteryRequired} requise` : needsAchievement ? `🔒 Succès « ${achievement.name} »` : '✔ Disponible'}</em>
-          </div>
-        </div>;
-      })}
-    </div>
-    <p className="small-note">Un passif est proposé tous les 5 niveaux parmi ceux qui sont disponibles.</p>
-  </div>;
-}
-
-function rewardsOf(unlocks: string[] = []) {
-  return unlocks.flatMap((id) => {
-    const item = ITEMS.find((entry) => entry.id === id);
-    if (item) return [{ id, name: item.name, description: item.description, rarity: item.rarity as Rarity, kind: 'Objet' }];
-    const passive = PASSIVES.find((entry) => entry.id === id);
-    return passive ? [{ id, name: passive.name, description: passive.description, rarity: passiveRarity(passive.weight), kind: 'Passif' }] : [];
-  });
-}
-
-function AchievementList({ profile }: { profile: Profile }) {
-  const [focus, setFocus] = useState<string | null>(null);
-  const selected = ACHIEVEMENTS.find((entry) => entry.id === focus) ?? ACHIEVEMENTS[0];
-  const selectedRewards = rewardsOf(selected.unlocks);
-  const done = (id: string) => profile.achievements.includes(id);
-  return <div className="achievement-list">
-    <h3>Succès · {ACHIEVEMENTS.filter((entry) => done(entry.id)).length}/{ACHIEVEMENTS.length}</h3>
-    <div className="achievement-grid">
-      {ACHIEVEMENTS.map((entry) => {
-        const first = rewardsOf(entry.unlocks)[0];
-        return <button key={entry.id} className={`achievement-tile${done(entry.id) ? ' done' : ''}${selected.id === entry.id ? ' active' : ''}`}
-          onMouseEnter={() => setFocus(entry.id)} onFocus={() => setFocus(entry.id)} onClick={() => setFocus(entry.id)}>
-          <span className="tile-icon">{first ? <ItemIcon id={first.id} rarity={first.rarity} size={40} /> : <b>★</b>}</span>
-          <span className="tile-name">{entry.name}</span>
-          <span className="tile-state">{done(entry.id) ? '✔ Obtenu' : '🔒 À débloquer'}</span>
-        </button>;
-      })}
-    </div>
-    <div className="achievement-detail" aria-live="polite">
-      <strong>{done(selected.id) ? '✔' : '○'} {selected.name}</strong>
-      <span>{selected.description}</span>
-      {selectedRewards.length > 0 ? <div className="reward-tiles">
-        {selectedRewards.map((reward) => <div key={reward.id} className={`reward-tile rarity-${reward.rarity}`} style={{ borderColor: RARITIES[reward.rarity].color }}>
-          <ItemIcon id={reward.id} rarity={reward.rarity} size={48} />
-          <div><small style={{ color: RARITIES[reward.rarity].color }}>{reward.kind} · {RARITIES[reward.rarity].label}</small><strong>{reward.name}</strong><span>{reward.description}</span></div>
-        </div>)}
-      </div> : <small>Aucune récompense : succès purement honorifique.</small>}
-    </div>
-  </div>;
-}
-
 function PanelHeading({ label, title, onClose }: { label: string; title: string; onClose?: () => void }) {
-  return <div className="panel-heading"><div><p className="eyebrow">{label}</p><h2>{title}</h2></div>{onClose && <button onClick={onClose}>Fermer <kbd>Échap</kbd></button>}</div>;
+  return <div className="panel-heading"><div><p className="eyebrow">{label}</p><h2>{title}</h2></div>{onClose && <button onClick={onClose}>Retour <kbd>Échap</kbd></button>}</div>;
 }
 
 function statLabel(key: string): string {
   return ({ strength: 'Force', speed: 'Vitesse', luck: 'Chance', critChance: 'Critique', critDamage: 'Dégâts critiques', maxHp: 'PV maximum', defense: 'Défense' })[key] ?? key;
 }
 
-function compareEquipment(run: RunState, instanceId: string): string {
-  const item = ITEMS.find((entry) => entry.id === run.inventory.find((entry) => entry.instanceId === instanceId)?.itemId);
-  if (!item || item.slot === 'consumable') return '';
-  const equippedSlot = Object.entries(run.equipment).find(([, id]) => id === instanceId)?.[0];
-  const slot = equippedSlot === 'weapon' || equippedSlot === 'armor' || equippedSlot === 'charm' || equippedSlot === 'charm2'
-    ? equippedSlot
-    : slotForItem(item.id);
-  if (!slot) return '';
-  const before = deriveStats(run);
-  const after = deriveStats(equipItem(run, instanceId, slot));
-  return (Object.keys(before) as (keyof typeof before)[])
-    .filter((key) => before[key] !== after[key])
-    .map((key) => {
-      const format = (value: number) => Number.isInteger(value) ? String(value) : value.toFixed(2);
-      return `${statLabel(key)} ${format(before[key])} → ${format(after[key])}`;
-    })
-    .join(' · ');
-}

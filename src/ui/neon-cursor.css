@@ -1,0 +1,10 @@
+:root {
+  --neon-cursor: url('./cursors/neon-rounded-default.svg') 4 4, default;
+  --neon-pointer: url('./cursors/neon-rounded-pointer.svg') 4 4, pointer;
+}
+html, body, #root, .shell, body canvas { cursor: var(--neon-cursor); }
+body button:not(:disabled), body a[href], body [role='button'], body .enemy-fighter,
+body input[type='checkbox']:not(:disabled), body input[type='range']:not(:disabled),
+body select:not(:disabled), body summary, body label:has(input[type='checkbox']:not(:disabled)) { cursor: var(--neon-pointer); }
+body button:disabled, body input:disabled, body select:disabled { cursor: not-allowed; }
+body input[type='text'], body input[type='number'], body textarea { cursor: text; }

@@ -23,14 +23,93 @@ const Eyes = ({ x, y, gap, size = 7, color = '#fff', pupil = INK }: { x: number;
   </>
 );
 
-const ART_ALIAS: Record<string, string> = { 'meadow-boss': 'slime', 'forest-boss': 'wolf', 'marsh-boss': 'wisp', 'crypt-boss': 'skeleton' };
-
-export function EnemyArt({ id: rawId, color }: { id: string; color: number }) {
-  const id = ART_ALIAS[rawId] ?? rawId;
+export function EnemyArt({ id, color }: { id: string; color: number }) {
   const base = hex(color);
   const dark = shade(color, 0.65);
   const light = shade(color, 1.25);
   switch (id) {
+    case 'meadow-boss':
+      return <>
+        <ellipse cx="100" cy="173" rx="91" ry="18" fill={dark} opacity=".5" />
+        <path d="M12 168 C7 147 25 137 31 111 C39 75 62 60 100 60 C138 60 161 75 169 111 C175 137 193 147 188 168 Q179 190 152 181 Q127 195 100 184 Q73 195 48 181 Q21 190 12 168Z" fill={base} {...line} />
+        <path d="M30 163 Q35 146 40 126 Q49 84 76 78" fill="none" stroke="#e6fff7" strokeOpacity=".5" strokeWidth="7" strokeLinecap="round" />
+        <path d="M169 160 Q151 151 154 126 Q148 86 129 77 Q165 91 169 122 Q174 145 180 163Z" fill={dark} opacity=".45" />
+        <path d="M57 52 48 23 76 38 100 12 124 38 152 23 143 52Z" fill="#d8b75f" {...line} />
+        <path d="M57 52 143 52 139 64 61 64Z" fill="#91713d" {...line} />
+        <path d="M65 49 59 36 77 45 100 25 123 45 141 36 135 49Z" fill="#fff0a6" opacity=".65" />
+        <path d="m100 40 7 9-7 9-7-9Z" fill="#42e6cb" {...line} strokeWidth={1.5} />
+        <circle cx="48" cy="23" r="4" fill="#f4d98a" {...line} strokeWidth={1.5} />
+        <circle cx="100" cy="12" r="4" fill="#f4d98a" {...line} strokeWidth={1.5} />
+        <circle cx="152" cy="23" r="4" fill="#f4d98a" {...line} strokeWidth={1.5} />
+        <path d="M56 96 Q69 90 84 100 L83 112 Q65 117 56 107Z M144 96 Q131 90 116 100 L117 112 Q135 117 144 107Z" fill="#fff0ba" {...line} strokeWidth={2} />
+        <path d="M72 98 75 110 M128 98 125 110" stroke={INK} strokeWidth="5" strokeLinecap="round" />
+        <path d="M52 88 85 96 M148 88 115 96" stroke={dark} strokeWidth="6" strokeLinecap="round" />
+        <path d="M77 125 Q100 139 123 125 Q116 148 100 148 Q84 148 77 125Z" fill={dark} {...line} strokeWidth={2} />
+        <path d="m82 129 5 11 6-8 M107 132 113 140 118 129" fill="#e8fff7" stroke={INK} strokeWidth="1.5" />
+        <path d="m100 151 13 14-13 16-13-16Z" fill="#d8b75f" {...line} strokeWidth={2} />
+        <path d="m100 157 7 8-7 9-7-9Z" fill="#e5fff8" />
+        <circle cx="45" cy="145" r="7" fill={light} opacity=".8" /><circle cx="155" cy="144" r="6" fill={light} opacity=".6" />
+        <circle cx="64" cy="164" r="4" fill="#e6fff7" opacity=".45" /><circle cx="133" cy="173" r="4" fill="#e6fff7" opacity=".4" />
+      </>;
+    case 'forest-boss':
+      return <>
+        <path d="M29 157 12 142 28 111 16 104 38 79 45 34 71 48 100 31 129 48 155 34 162 79 184 104 172 111 188 142 171 157 177 176 144 173 126 187 100 179 74 187 56 173 23 176Z" fill={dark} {...line} />
+        <path d="M48 73 45 13 83 49Z M152 73 155 13 117 49Z" fill={base} {...line} />
+        <path d="M54 55 53 29 72 48Z M146 55 147 29 128 48Z" fill="#bd7885" />
+        <path d="M37 112 Q44 57 100 54 Q156 57 163 112 L145 154 100 173 55 154Z" fill={base} {...line} />
+        <path d="M45 92 64 80 58 103 78 95 63 121 43 124Z M155 92 136 80 142 103 122 95 137 121 157 124Z" fill={light} opacity=".5" />
+        <path d="M66 116 Q100 94 134 116 L131 151 100 172 69 151Z" fill="#d7e0e8" {...line} />
+        <path d="M57 91 84 98 81 111 55 103Z M143 91 116 98 119 111 145 103Z" fill="#ffbd54" {...line} strokeWidth={2} />
+        <path d="M70 96 72 108 M130 96 128 108" stroke={INK} strokeWidth="4" strokeLinecap="round" />
+        <path d="M53 80 84 91 M147 80 116 91" stroke={dark} strokeWidth="7" strokeLinecap="round" />
+        <path d="m90 120 20 0 5 7-15 12-15-12Z" fill={INK} />
+        <path d="M77 142 Q100 130 123 142 L117 159 Q100 166 83 159Z" fill="#612c3b" {...line} strokeWidth={2} />
+        <path d="M80 142 87 159 93 141Z M107 141 113 159 120 142Z" fill="#fff3d4" {...line} strokeWidth={1.5} />
+        <path d="M132 62 123 89 M141 65 132 86" stroke="#dba2a0" strokeWidth="3" strokeLinecap="round" />
+        <path d="M60 166 80 171 100 169 120 171 140 166 138 181 117 185 100 183 83 185 62 181Z" fill="#5b4735" {...line} strokeWidth={2} />
+        <path d="m100 174 7 8-7 10-7-10Z" fill="#f0d4a0" {...line} strokeWidth={1.5} />
+        <path d="M34 130 42 146 47 134Z M166 130 158 146 153 134Z" fill="#bac9d9" />
+      </>;
+    case 'marsh-boss':
+      return <>
+        <ellipse cx="100" cy="177" rx="75" ry="12" fill={base} opacity=".18" />
+        <path d="M22 168 Q4 126 28 97 Q21 123 41 128 M178 168 Q196 126 172 97 Q179 123 159 128" fill="none" stroke={base} strokeWidth="7" strokeLinecap="round" opacity=".55" />
+        <path d="M47 181 Q57 138 47 112 L66 69 Q100 13 134 69 L153 112 Q143 138 153 181 L134 166 124 187 106 170 91 188 78 168 62 184Z" fill={dark} {...line} />
+        <path d="M66 80 Q100 23 134 80 L126 111 74 111Z" fill={base} {...line} />
+        <path d="M78 77 Q100 47 122 77 L119 100 Q100 115 81 100Z" fill="#0b1a2c" {...line} strokeWidth={2} />
+        <path d="M82 82 94 87 83 92Z M118 82 106 87 117 92Z" fill="#d5fff8" />
+        <path d="M91 101 Q100 94 109 101" fill="none" stroke="#80f4e5" strokeWidth="2" />
+        <path d="M68 113 48 103 22 137 32 148 58 125 M132 113 152 103 178 137 168 148 142 125" fill={base} {...line} />
+        <path d="M76 111 Q100 129 124 111 L117 152 100 168 83 152Z" fill={base} opacity=".55" />
+        <path d="M100 12 Q90 33 100 47 Q112 32 100 12Z" fill="#c1fff1" {...line} strokeWidth={1.5} />
+        <path d="M99 135 Q75 149 100 164 Q125 149 99 135Z" fill="#d1fff7" {...line} strokeWidth={2} />
+        <path d="M87 147 Q100 139 113 147 Q100 160 87 147Z" fill={dark} />
+        <path d="M40 128 Q24 150 37 167 M160 128 Q176 150 163 167" fill="none" stroke="#b8ffe7" strokeWidth="3" strokeDasharray="4 5" />
+        <circle cx="24" cy="87" r="5" fill="#c1fff1" /><circle cx="177" cy="76" r="4" fill="#c1fff1" /><circle cx="169" cy="178" r="3" fill={light} />
+      </>;
+    case 'crypt-boss':
+      return <>
+        <path d="M24 180 36 96 68 77 100 84 132 77 164 96 176 180 146 176 132 189 100 182 68 189 54 176Z" fill="#513254" {...line} />
+        <path d="M39 98 69 90 63 116 27 114Z M161 98 131 90 137 116 173 114Z" fill={base} {...line} />
+        <path d="M31 103 21 85 48 95 M169 103 179 85 152 95" fill="#d5cfbb" {...line} strokeWidth={2} />
+        <path d="M70 96 81 86 119 86 130 96 126 142 113 156 87 156 74 142Z" fill="#8e92ae" {...line} />
+        <path d="M83 105 Q100 116 117 105 M82 117 Q100 128 118 117 M85 130 Q100 141 115 130" fill="none" stroke="#eee9db" strokeWidth="5" strokeLinecap="round" />
+        <path d="M100 96v45" stroke="#353548" strokeWidth="3" />
+        <path d="M74 41 Q100 18 126 41 L130 62 121 80 79 80 70 62Z" fill="#eee9db" {...line} />
+        <path d="M76 31 69 10 88 20 100 4 112 20 131 10 124 31Z" fill="#ba9a58" {...line} />
+        <path d="M76 31h48v9H76Z" fill="#756246" {...line} strokeWidth={2} />
+        <path d="m100 16 5 7-5 7-5-7Z" fill="#bd8bff" {...line} strokeWidth={1.5} />
+        <path d="M78 52 94 56 90 66 77 62Z M122 52 106 56 110 66 123 62Z" fill="#2d243d" {...line} strokeWidth={2} />
+        <circle cx="85" cy="59" r="3" fill="#d496ff" /><circle cx="115" cy="59" r="3" fill="#d496ff" />
+        <path d="m100 65-5 9h10Z" fill="#353548" />
+        <path d="M85 80v7M95 80v7M105 80v7M115 80v7" stroke="#eee9db" strokeWidth="5" />
+        <path d="M84 156 78 180 M116 156 122 180" stroke="#c1bed1" strokeWidth="9" strokeLinecap="round" />
+        <path d="M30 126v51M170 51v132" stroke="#d6c394" strokeWidth="7" strokeLinecap="round" />
+        <path d="M155 38 Q170 13 185 38 L181 53 159 53Z" fill="#9062b5" {...line} />
+        <path d="m170 28 7 12-7 12-7-12Z" fill="#e2b4ff" />
+        <circle cx="30" cy="132" r="7" fill="#eee9db" {...line} strokeWidth={2} />
+        <circle cx="170" cy="125" r="7" fill="#eee9db" {...line} strokeWidth={2} />
+      </>;
     case 'slime':
       return <>
         <path d="M28 172 C22 118 58 66 100 66 C142 66 178 118 172 172 Q100 188 28 172Z" fill={base} {...line} />
@@ -164,7 +243,7 @@ export function EnemyArt({ id: rawId, color }: { id: string; color: number }) {
   }
 }
 
-function HeroArt({ hero, color }: { hero: HeroId; color: number }) {
+export function HeroArt({ hero, color }: { hero: HeroId; color: number }) {
   const base = hex(color);
   const dark = shade(color, 0.6);
   if (hero === 'warrior') {

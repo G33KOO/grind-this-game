@@ -172,8 +172,7 @@ export function advanceEncounter(run: RunState, distance: number, profile: Profi
     remaining -= segment;
     if (checkpointDistance >= BALANCE.encounterCheckDistance) {
       checkpointDistance = 0;
-      const chance = meter >= BALANCE.maxEncounterMeter ? 1 :
-        clamp(0.005 + 0.995 * meter ** 6, 0, 1);
+      const chance = encounterChance(meter);
       const roll = nextRandom(rngState);
       rngState = roll.state;
       triggered = roll.value < chance;
@@ -199,19 +198,38 @@ export function canDrop(itemId: string, profile: Profile): boolean {
   return !!item && (!item.unlockAchievement || profile.achievements.includes(item.unlockAchievement));
 }
 
+export function encounterChance(meter: number): number {
+  return meter >= BALANCE.maxEncounterMeter ? 1 : clamp(0.005 + 0.995 * meter ** 6, 0, 1);
+}
+
+/** Exact probabilities per defeated monster, shared by the loot roll and UI. */
+export function lootOdds(run: RunState, enemyId: string, profile: Profile) {
+  return lootOddsForLuck(deriveStats(run).luck, enemyId, profile);
+}
+
+export function lootOddsForLuck(luck: number, enemyId: string, profile: Profile) {
+  const chance = clamp(0.12 * (1 + luck * 0.025), 0.03, 0.45);
+  const entries = (ENEMIES.find((enemy) => enemy.id === enemyId)?.loot ?? []).map((entry) => {
+    const item = ITEMS.find((item) => item.id === entry.itemId)!;
+    const unlocked = canDrop(entry.itemId, profile);
+    const bonus = item.rarity === 'epic' ? 0.055 : item.rarity === 'rare' ? 0.035 : 0;
+    return { ...entry, item, unlocked, effectiveWeight: unlocked ? entry.weight * (1 + luck * bonus) : 0 };
+  });
+  const total = entries.reduce((sum, entry) => sum + entry.effectiveWeight, 0);
+  return { chance: total > 0 ? chance : 0, entries: entries.map((entry) => ({ ...entry,
+    probability: total > 0 ? chance * entry.effectiveWeight / total : 0 })) };
+}
+
 export function rollLoot(run: RunState, enemyId: string, profile: Profile): { run: RunState; drops: string[] } {
   const enemy = ENEMIES.find((candidate) => candidate.id === enemyId);
   if (!enemy) return { run, drops: [] };
   let rngState = run.rngState;
-  const chance = clamp(0.12 * (1 + deriveStats(run).luck * 0.025), 0.03, 0.45);
+  const odds = lootOdds(run, enemyId, profile);
+  const chance = odds.chance;
   let roll = nextRandom(rngState);
   rngState = roll.state;
   if (roll.value >= chance) return { run: { ...run, rngState }, drops: [] };
-  const eligible = enemy.loot.filter((entry) => canDrop(entry.itemId, profile)).map((entry) => {
-    const rarity = ITEMS.find((item) => item.id === entry.itemId)?.rarity;
-    const rarityBonus = rarity === 'epic' ? 0.055 : rarity === 'rare' ? 0.035 : 0;
-    return { ...entry, effectiveWeight: entry.weight * (1 + deriveStats(run).luck * rarityBonus) };
-  });
+  const eligible = odds.entries.filter((entry) => entry.unlocked);
   const total = eligible.reduce((sum, entry) => sum + entry.effectiveWeight, 0);
   if (!total) return { run: { ...run, rngState }, drops: [] };
   roll = nextRandom(rngState);

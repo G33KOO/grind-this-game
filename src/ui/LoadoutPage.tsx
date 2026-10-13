@@ -3,6 +3,8 @@ import { ACHIEVEMENTS, HEROES, ITEMS, PASSIVES, STARTING_OPTIONS, type StartOpti
 import { isStartOptionUnlocked, type Loadout } from '../game/engine';
 import type { HeroId, Profile } from '../game/types';
 import { HERO_ACCENT, HeroGlyph, ItemIcon, RARITIES, passiveRarity, type Rarity } from './icons';
+import { HeroPortrait, MenuFooter } from './GameVisuals';
+import { SpaceBackdrop } from './SpaceBackdrop';
 
 interface OptionView { id: string; name: string; description: string; rarity: Rarity }
 
@@ -45,16 +47,19 @@ export function LoadoutPage({ hero, profile, onStart, onBack }: { hero: HeroId; 
   const [weapon, setWeapon] = useState(options.weapons[0].id);
   const [passive, setPassive] = useState(options.passives[0].id);
   return <main className="shell title-screen classes-page" style={{ ['--accent' as string]: HERO_ACCENT[hero] }}>
-    <div className="title-grid" aria-hidden="true" />
+    <SpaceBackdrop />
     <header className="classes-head">
-      <button onClick={onBack}>← Retour</button>
       <h2><HeroGlyph hero={hero} size={20} /> {HEROES[hero].name} · équipement de départ</h2>
     </header>
     <section className="panel page-panel loadout-panel">
+      <aside className="loadout-character"><HeroPortrait hero={hero} /><p className="eyebrow">CHOISISSEZ VOTRE VOIE</p><h2>{HEROES[hero].name}</h2><p>{hero === 'warrior' ? 'Tenez la ligne. Brisez le seuil.' : 'Frappez vite. Ne laissez aucune trace.'}</p></aside>
+      <div className="loadout-selection">
       <OptionGroup title="Arme de départ" options={options.weapons} describe={describeWeapon} selected={weapon} onSelect={setWeapon} profile={profile} />
       <OptionGroup title="Passif de départ" options={options.passives} describe={describePassive} selected={passive} onSelect={setPassive} profile={profile} />
       <p className="small-note">De nouvelles armes et de nouveaux passifs de départ se débloquent avec les succès.</p>
       <div className="loadout-actions"><button className="primary" onClick={() => onStart({ weapon, passive })}>Commencer la partie</button></div>
+      </div><MenuFooter />
     </section>
+    <div className="page-bottom-actions"><button onClick={onBack}>Retour au choix de classe</button></div>
   </main>;
 }

@@ -1,4 +1,7 @@
 import { useEffect, useState } from 'react';
+import { ITEMS } from '../game/content';
+import { ItemIcon } from './icons';
+import { StatIcon } from './GameVisuals';
 
 export interface CombatRecapData {
   xpGained: number;
@@ -71,19 +74,19 @@ export function CombatRecap({ recap, points, pendingPassives, stats, onSpend, on
     <div className="recap-overlay" role="dialog" aria-label="Bilan du combat">
       <section className="recap-card">
         <p className="eyebrow">VICTOIRE</p>
-        <h2>Combat remporté</h2>
+        <div className="victory-emblem" aria-hidden="true">✦</div><h2>Combat remporté</h2>
         <p className="recap-line">{recap.kills} ennemi(s) vaincu(s) · <strong>+{recap.xpGained} XP</strong></p>
         <div className="recap-level">
           <span className={`recap-level-badge ${showLevelUp ? 'is-up' : ''}`} key={shown.level}>NIV. {shown.level}</span>
           <div className="meter xp recap-meter"><i style={{ width: `${Math.round(shown.width * 100)}%`, transition: shown.instant ? 'none' : `width ${STEP_MS}ms ease-out` }} /></div>
         </div>
         {showLevelUp && <p className="recap-levelup" aria-live="polite">Niveau supérieur ! {gained > 1 ? `+${gained} niveaux` : ''}</p>}
-        {recap.loot.length > 0 && <p className="recap-loot">Butin : {recap.loot.join(' · ')}</p>}
+        {recap.loot.length > 0 && <div className="recap-loot"><p className="eyebrow">BUTIN OBTENU</p><div className="recap-loot-items">{recap.loot.map((name, index) => { const item = ITEMS.find((item) => item.name === name); return <div key={`${name}-${index}`}>{item && <ItemIcon id={item.id} rarity={item.rarity} size={64} />}<strong>{name}</strong></div>; })}</div></div>}
         {recap.notes.map((note) => <p className="recap-note" key={note}>{note}</p>)}
         {done && points > 0 && <div className="points-panel recap-points">
           <strong>{points} point(s) à répartir</strong>
           {stats.map((stat) => <div className="point-row" key={stat.key}>
-            <span>{stat.label}</span>
+            <StatIcon stat={stat.key} /><span>{stat.label}</span>
             {Array.from(new Set([1, 5, points])).filter((amount) => amount <= points).map((amount) => <button key={amount} onClick={() => onSpend(stat.key, amount)}>{amount === points ? 'Tout' : `+${amount}`}</button>)}
           </div>)}
         </div>}

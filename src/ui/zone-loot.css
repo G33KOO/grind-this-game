@@ -1,0 +1,15 @@
+.zone-loot-panel { overflow-y: auto; max-height: calc(100dvh / var(--ui-scale, 1) - 120px); }
+.zone-tabs { display: flex; flex-wrap: wrap; gap: 8px; margin: 18px 0; }
+.zone-tabs button[aria-pressed="true"] { border-color: #2ee6c8; background: #12362f; color: #d9fff8; }
+.farm-facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 12px; margin: 16px 0; }
+.farm-facts > div, .farm-monster { padding: 16px; border: 1px solid #2ee6c833; border-radius: 6px; background: #061218; }
+.farm-facts span, .farm-drops span, .farm-drops small { display: block; margin-top: 5px; color: #b3cec9; font-size: 14px; line-height: 1.5; }
+.farm-monsters { display: grid; gap: 14px; }
+.farm-monster-heading { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }
+.farm-monster-heading h3 { margin: 0; }
+.farm-monster-heading > span { color: #b3cec9; font-size: 14px; }
+.farm-drops { padding: 0; margin: 12px 0 0; list-style: none; }
+.farm-drops li { display: flex; align-items: center; gap: 12px; padding: 12px 0; border-top: 1px solid #ffffff12; }
+.farm-drops li > div { flex: 1; min-width: 0; }
+.farm-drops li > b { white-space: nowrap; color: #e3fff8; }
+.farm-drops .drop-locked { opacity: .65; }
