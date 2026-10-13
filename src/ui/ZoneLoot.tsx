@@ -1,52 +1,56 @@
 import { useState } from 'react';
-import { ACHIEVEMENTS, BALANCE, ENEMIES, ZONES } from '../game/content';
-import { deriveStats, encounterChance, lootOdds } from '../game/engine';
+import { ACHIEVEMENTS, ENEMIES, ZONES } from '../game/content';
+import { deriveStats, lootOdds } from '../game/engine';
 import type { Profile, RunState } from '../game/types';
 import { zoneAt } from '../game/world';
 import { ItemIcon, RARITIES } from './icons';
-import { MenuFooter, MonsterPortrait, StatIcon } from './GameVisuals';
+import { MonsterPortrait, StatIcon } from './GameVisuals';
 import './zone-loot.css';
 
 const percent = (value: number) => `${(value * 100).toLocaleString('fr-FR', { maximumFractionDigits: 2 })} %`;
-const ZONE_SYMBOLS = ['✿', '♠', '≋', '✝', '♨'];
 
 export function ZoneLoot({ run, profile, onClose }: { run: RunState; profile: Profile; onClose(): void }) {
   const current = zoneAt(run.position.x, run.position.y);
   const [selected, setSelected] = useState<string>(current.id);
   const [monster, setMonster] = useState<string>(current.enemies[0]);
-  const zone = ZONES.find((zone) => zone.id === selected)!;
-  const enemy = ENEMIES.find((enemy) => enemy.id === monster)!;
+  const [itemId, setItemId] = useState<string | null>(null);
+  const zone = ZONES.find((entry) => entry.id === selected)!;
+  const enemy = ENEMIES.find((entry) => entry.id === monster)!;
   const boss = enemy.id === zone.boss;
   const odds = lootOdds(run, enemy.id, profile);
-  const lootRows = odds.entries.filter((entry, index, entries) => entries.findIndex((candidate) => candidate.itemId === entry.itemId) === index)
+  const rows = odds.entries.filter((entry, index, entries) => entries.findIndex((candidate) => candidate.itemId === entry.itemId) === index)
     .map((entry) => ({ ...entry, probability: odds.entries.filter((candidate) => candidate.itemId === entry.itemId).reduce((sum, candidate) => sum + candidate.probability, 0) }));
-  const remaining = Math.max(0, BALANCE.encounterCheckDistance - run.distanceSinceEncounterCheck);
-  const nextMeter = Math.min(BALANCE.maxEncounterMeter, run.encounterMeter + remaining * BALANCE.encounterMeterChancePerUnit);
-  const monsterChance = 1 / zone.enemies.length;
-  return <section className="panel modal-panel zone-loot-panel" role="dialog" aria-modal="true" aria-label="Zones et butins">
-    <div className="panel-heading"><div><p className="eyebrow">ATLAS / BESTIAIRE</p><h2>Terres du seuil</h2></div><button onClick={onClose}>Retour <kbd>Échap</kbd></button></div>
-    <div className="atlas-layout">
-      <nav className="atlas-zones" aria-label="Choisir une zone">{ZONES.map((entry, index) => <button key={entry.id} aria-pressed={selected === entry.id} onClick={() => { setSelected(entry.id); setMonster(entry.enemies[0]); }} style={{ ['--biome' as string]: ['#2ee6c8', '#58ff6e', '#35a7ff', '#b36bff', '#ff6a2e'][index] }}>
-        <span className="zone-sigil" aria-hidden="true">{ZONE_SYMBOLS[index]}</span><span><small>ZONE 0{index + 1} · NIV. {entry.level}</small><strong>{entry.name}</strong><em>{entry.id === current.id ? '◆ Position actuelle' : entry.requires && !run.defeatedBosses.includes(entry.requires) ? 'Passage gardé' : 'Passage ouvert'}</em></span>
-      </button>)}</nav>
-      <div className="bestiary-content">
-        <header className="biome-heading"><div><p className="eyebrow">NIVEAU DE ZONE {zone.level}</p><h3>{zone.name}</h3></div><div className="biome-level">{zone.level}</div></header>
-        <div className="farm-facts"><div><strong>{zone.maxGroup === 1 ? '1 monstre' : `1 à ${zone.maxGroup} monstres`}</strong><span>Chaque monstre est tiré séparément · doublons possibles</span></div><div><strong><StatIcon stat="luck" /> {deriveStats(run).luck} Chance</strong><span>Taux ajustés à votre build</span></div><div><strong>{percent(encounterChance(nextMeter))} rencontre</strong><span>Prochain contrôle dans ~{Math.ceil(remaining)} px · toutes les zones</span></div></div>
-        <nav className="monster-roster" aria-label="Monstres de la zone">{[...zone.enemies, zone.boss].map((id) => {
-          const entry = ENEMIES.find((enemy) => enemy.id === id)!;
-          return <button key={id} aria-pressed={monster === id} onClick={() => setMonster(id)}><MonsterPortrait id={id} color={entry.color} /><strong>{entry.name}</strong><small>{id === zone.boss ? 'BOSS' : `${percent(monsterChance)} par tirage`}</small></button>;
-        })}</nav>
-        <article className="bestiary-inspector">
-          <aside className="bestiary-art"><MonsterPortrait id={enemy.id} color={enemy.color} /><p className="eyebrow">{boss ? 'GARDIEN DE ZONE' : 'ENNEMI'}</p><h3>{enemy.name}</h3><div className="monster-vitals"><span>♥ {enemy.hp} PV</span><span>✦ {enemy.xp} XP</span><span>⚔ {enemy.strength}</span><span>➤ {enemy.speed}</span></div></aside>
-          <div className="bestiary-drops"><div className="bag-heading"><h3>Butins possibles</h3><span>{percent(odds.chance)} / monstre</span></div>
-            <p className="small-note">{boss ? (run.defeatedBosses.includes(enemy.id) ? 'Déjà vaincu dans cette partie.' : 'Combat au contact · position fixe.') : `Chaque monstre du groupe a ${percent(monsterChance)} de chances d’être ${enemy.name}.`}</p>
-            <ul className="farm-drops">{lootRows.map((entry) => <li key={entry.itemId} className={entry.owned && entry.item.slot !== 'consumable' ? 'drop-owned' : entry.eligible ? '' : 'drop-locked'}>
-              <ItemIcon id={entry.itemId} rarity={entry.item.rarity} size={48} /><div><strong style={{ color: RARITIES[entry.item.rarity].color }}>{entry.item.name}</strong><span>{entry.item.description}</span>{!entry.unlocked && !entry.owned ? <small>🔒 {ACHIEVEMENTS.find((achievement) => achievement.id === entry.item.unlockAchievement)?.name}</small> : entry.item.slot === 'consumable' && <small>Consommable · plusieurs exemplaires possibles</small>}</div>{entry.owned && entry.item.slot !== 'consumable' ? <b className="drop-owned-label">Déjà obtenu</b> : <b>{percent(entry.probability)}</b>}
-            </li>)}</ul><p className="small-note">Aucun objet : {percent(1 - odds.chance)} · Un objet maximum par monstre après victoire. Les tirages d’objets sont exclusifs.</p>
-          </div>
-        </article>
-        <p className="small-note atlas-rules">Contrôle tous les {BALANCE.encounterCheckDistance} pixels parcourus, garanti à jauge pleine. {zone.requires && !run.defeatedBosses.includes(zone.requires) ? `Accès gardé par ${ENEMIES.find((enemy) => enemy.id === zone.requires)?.name}. ` : ''}Les déblocages s’appliquent aux combats suivants.</p>
-      </div>
-    </div><MenuFooter />
+  const focused = rows.find((entry) => entry.itemId === itemId) ?? rows[0];
+  const unlock = focused?.item.unlockAchievement ? ACHIEVEMENTS.find((entry) => entry.id === focused.item.unlockAchievement) : undefined;
+  const guarded = zone.requires && !run.defeatedBosses.includes(zone.requires);
+  const guardName = ENEMIES.find((entry) => entry.id === zone.requires)?.name;
+  const vitals = [
+    { stat: 'maxHp', label: 'PV', value: enemy.hp }, { stat: 'strength', label: 'Force', value: enemy.strength },
+    { stat: 'defense', label: 'Défense', value: enemy.defense }, { stat: 'speed', label: 'Vitesse', value: enemy.speed },
+    { stat: 'luck', label: 'XP', value: enemy.xp },
+  ];
+  return <section className="panel modal-panel zone-loot-panel loot-atlas" role="dialog" aria-modal="true" aria-labelledby="loot-title">
+    <header className="loot-heading"><h2 id="loot-title">Butin</h2></header>
+    <nav className="loot-zones" aria-label="Choisir une zone">{ZONES.map((entry) => <button key={entry.id} aria-pressed={selected === entry.id} onClick={() => { setSelected(entry.id); setMonster(entry.enemies[0]); setItemId(null); }}><strong>{entry.name}</strong><span>Niveau {entry.level}{entry.id === current.id ? ' · Ici' : ''}</span></button>)}</nav>
+    <div className="loot-zone-facts"><span>{zone.maxGroup === 1 ? '1 ennemi par rencontre' : `1 à ${zone.maxGroup} ennemis par rencontre`}</span><span><StatIcon stat="luck" /> Chance <strong>{deriveStats(run).luck}</strong></span><span className={guarded ? 'is-guarded' : 'is-open'}>{guarded ? `Accès gardé : ${guardName}` : 'Zone accessible'}</span></div>
+    <div className="loot-layout">
+      <nav className="loot-monsters" aria-label="Monstres de la zone">{[...zone.enemies, zone.boss].map((id) => {
+        const creature = ENEMIES.find((entry) => entry.id === id)!;
+        return <button key={id} aria-pressed={monster === id} onClick={() => { setMonster(id); setItemId(null); }}><MonsterPortrait id={id} color={creature.color} /><span><strong>{creature.name}</strong><small>{id === zone.boss ? 'Boss · au contact' : `${percent(1 / zone.enemies.length)} par tirage`}</small></span></button>;
+      })}</nav>
+      <article className="loot-creature" aria-label={`Statistiques de ${enemy.name}`}><h3>{enemy.name}</h3><div className="loot-creature-art"><MonsterPortrait id={enemy.id} color={enemy.color} /></div>
+        <div className="loot-vitals">{vitals.map((entry) => <div key={entry.stat}><StatIcon stat={entry.stat} /><strong>{entry.value}</strong><small>{entry.label}</small></div>)}</div>
+        <p className="loot-encounter-note">{boss ? (run.defeatedBosses.includes(enemy.id) ? 'Boss déjà vaincu dans cette partie' : 'Boss fixe · combat au contact') : 'Chaque ennemi du groupe est tiré séparément. Doublons possibles.'}</p>
+      </article>
+      <article className="loot-table"><header><h3>Table de butin</h3><span>{percent(odds.chance)} d’obtenir un objet</span></header>
+        <div className="loot-drop-list" aria-label="Objets possibles">{rows.map((entry) => {
+          const owned = entry.owned && entry.item.slot !== 'consumable';
+          return <button key={entry.itemId} className={!entry.unlocked && !owned ? 'is-locked' : ''} aria-pressed={focused?.itemId === entry.itemId} onClick={() => setItemId(entry.itemId)}><ItemIcon id={entry.itemId} rarity={entry.item.rarity} size={34} /><span className="loot-drop-name" style={{ color: RARITIES[entry.item.rarity].color }}>{entry.item.name}</span><strong className={owned ? 'loot-owned' : !entry.unlocked ? 'loot-locked-label' : ''}>{owned ? 'Déjà obtenu' : !entry.unlocked ? 'Verrouillé' : percent(entry.probability)}</strong></button>;
+        })}</div>
+        <div className="loot-item-detail" aria-live="polite" aria-label={focused ? `Détails de ${focused.item.name}` : 'Détails du butin'}>{focused && <><strong>{focused.item.name}</strong><p>{focused.item.description}</p>{focused.owned && focused.item.slot !== 'consumable' ? <small className="loot-owned">Déjà obtenu · exclu des prochains drops</small> : unlock ? <small>Succès requis : {unlock.name}</small> : focused.item.slot === 'consumable' && <small>Consommable · plusieurs exemplaires possibles</small>}</>}</div>
+        <p className="loot-drop-note">Aucun objet : {percent(1 - odds.chance)} · Taux ajustés à votre Chance</p>
+      </article>
+    </div>
+    <footer className="loot-return"><button onClick={onClose}>Retour</button></footer>
   </section>;
 }
