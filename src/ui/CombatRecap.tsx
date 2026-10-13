@@ -33,13 +33,12 @@ const STEP_MS = 900;
 export interface CombatRecapProps {
   recap: CombatRecapData;
   points: number;
-  pendingPassives: number;
   stats: { key: string; label: string }[];
   onSpend(key: string, amount: number): void;
   onContinue(): void;
 }
 
-export function CombatRecap({ recap, points, pendingPassives, stats, onSpend, onContinue }: CombatRecapProps) {
+export function CombatRecap({ recap, points, stats, onSpend, onContinue }: CombatRecapProps) {
   const [shown, setShown] = useState({ level: recap.levelBefore, width: recap.fillBefore, instant: true });
   const [done, setDone] = useState(false);
 
@@ -90,7 +89,6 @@ export function CombatRecap({ recap, points, pendingPassives, stats, onSpend, on
             {Array.from(new Set([1, 5, points])).filter((amount) => amount <= points).map((amount) => <button key={amount} onClick={() => onSpend(stat.key, amount)}>{amount === points ? 'Tout' : `+${amount}`}</button>)}
           </div>)}
         </div>}
-        {done && pendingPassives > 0 && <p className="recap-note">{pendingPassives} passif(s) à choisir ensuite.</p>}
         <button className="primary" disabled={!done} onClick={onContinue}>{done ? 'Continuer' : '…'}</button>
       </section>
     </div>

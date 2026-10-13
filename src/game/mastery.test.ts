@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { ACHIEVEMENTS, ENEMIES, ITEMS, PASSIVES, masteryLevelsForRank, masteryRank } from './content';
-import { applyProgress, canDrop, creditMastery, initialProfile, newRun, passiveChoices, rollLoot } from './engine';
+import { ACHIEVEMENTS, ENEMIES, ITEMS, PASSIVES, STARTING_OPTIONS, masteryLevelsForRank, masteryRank } from './content';
+import { applyProgress, canDrop, creditMastery, initialProfile, newRun, isStartOptionUnlocked, resolveLoadout, activeEffects, deriveStats, startCombat, stepCombat, rollLoot } from './engine';
 import type { RunState } from './types';
 
 const at = (hero: 'warrior' | 'assassin', level: number, extra: Partial<RunState> = {}): RunState => ({ ...newRun(hero), level, ...extra });
@@ -27,19 +27,52 @@ describe('class mastery', () => {
     expect(creditMastery(initialProfile(), at('warrior', 8, { developerMode: true })).profile.mastery.warrior).toBe(0);
   });
 
-  it('unlocks class passives only for the matching class at the right rank', () => {
-    const base = initialProfile();
-    const rich = { ...base, mastery: { warrior: masteryLevelsForRank(5), assassin: 0 } };
-    const warrior = { ...at('warrior', 5), rngState: 12345 };
-    const offered = new Set<string>();
-    for (let seed = 1; seed < 80; seed++) for (const id of passiveChoices({ ...warrior, rngState: seed }, rich)) offered.add(id);
-    expect(offered.has('war-cry')).toBe(true);
-    expect(offered.has('living-bastion')).toBe(true);
-    for (const id of offered) expect(['warrior', 'both']).toContain(PASSIVES.find((p) => p.id === id)!.hero);
-    const poor = new Set<string>();
-    for (let seed = 1; seed < 80; seed++) for (const id of passiveChoices({ ...warrior, rngState: seed }, base)) poor.add(id);
-    expect(poor.has('war-cry')).toBe(false);
+  it('unlocks starting choices at their exact mastery rank for the matching class', () => {
+    for (const hero of ['warrior', 'assassin'] as const) {
+      for (const option of [...STARTING_OPTIONS[hero].weapons, ...STARTING_OPTIONS[hero].passives]) {
+        const profile = initialProfile();
+        profile.mastery[hero] = masteryLevelsForRank(option.masteryRequired);
+        expect(isStartOptionUnlocked(option, profile, hero)).toBe(true);
+        if (option.masteryRequired > 0) {
+          profile.mastery[hero]--;
+          expect(isStartOptionUnlocked(option, profile, hero)).toBe(false);
+          profile.mastery[hero === 'warrior' ? 'assassin' : 'warrior'] = 10000;
+          expect(isStartOptionUnlocked(option, profile, hero)).toBe(false);
+        }
+      }
+    }
   });
+
+  it('gates starts by mastery independently of achievements and retains early choices', () => {
+    const profile = { ...initialProfile(), achievements: ACHIEVEMENTS.map((entry) => entry.id), unlockedPassives: PASSIVES.map((entry) => entry.id) };
+    expect(resolveLoadout('warrior', profile, { weapon: 'grave-blade', passive: 'fortress' })).toEqual({ weapon: 'iron-sword', passive: 'iron-skin' });
+    profile.mastery.warrior = masteryLevelsForRank(10);
+    expect(resolveLoadout('warrior', profile, { weapon: 'iron-sword', passive: 'fortress' })).toEqual({ weapon: 'iron-sword', passive: 'fortress' });
+    expect(resolveLoadout('warrior', profile, { passive: 'venom' }).passive).toBe('iron-skin');
+    const withoutAchievements = { ...profile, achievements: [] };
+    expect(resolveLoadout('warrior', withoutAchievements, { weapon: 'grave-blade', passive: 'living-bastion' })).toEqual({ weapon: 'grave-blade', passive: 'living-bastion' });
+  });
+
+  it('keeps equipment stat based and allows early equipment to outperform later gear through synergy', () => {
+    expect(ITEMS.filter((item) => item.slot !== 'consumable').every((item) => !item.effects?.length)).toBe(true);
+    const early = newRun('warrior', 42, { weapon: 'iron-sword', passive: 'fortress' });
+    const later = newRun('warrior', 42, { weapon: 'alpha-fang', passive: 'fortress' });
+    expect(deriveStats(early).strength).toBeLessThan(deriveStats(later).strength);
+    const attack = (run: RunState) => {
+      const state = startCombat(run, ['golem']);
+      return stepCombat({ ...state, playerNextAction: 0, playerStats: { ...state.playerStats, critChance: 0 } }).enemies[0].currentHp;
+    };
+    expect(attack(early)).toBeLessThan(attack(later));
+    expect(activeEffects(newRun('assassin', 42, { weapon: 'grave-blade', passive: 'venom' })).map((effect) => effect.kind)).toEqual(['poison']);
+  });
+
+  it('starts with full health including the chosen passive bonuses', () => {
+    const run = newRun('warrior', 42, { weapon: 'iron-sword', passive: 'battle-heart' });
+    expect(run.passives).toEqual([{ id: 'battle-heart', rank: 1 }]);
+    expect(run.hp).toBe(137);
+    expect(run.hp).toBe(deriveStats(run).maxHp);
+  });
+
 });
 
 describe('achievements', () => {
@@ -54,7 +87,7 @@ describe('achievements', () => {
     expect(applyProgress(initialProfile(), at('assassin', 10)).profile.achievements).not.toContain('warrior-level-10');
     const warrior = applyProgress(initialProfile(), at('warrior', 10)).profile;
     expect(warrior.achievements).toEqual(expect.arrayContaining(['level-10', 'warrior-level-10']));
-    expect(warrior.unlockedPassives).toContain('stone-heart');
+    expect(warrior.unlockedPassives).not.toContain('stone-heart');
   });
 
   it('gates new loot behind achievements and adds it to monster tables', () => {

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ACHIEVEMENTS, HEROES, PASSIVES, MASTERY_MAX_RANK, masteryRank, masteryLevelsForRank } from '../game/content';
+import { ITEMS, STARTING_OPTIONS, HEROES, PASSIVES, MASTERY_MAX_RANK, masteryRank, masteryLevelsForRank } from '../game/content';
 import type { HeroId, Profile, Stats } from '../game/types';
 import { HeroPortrait, StatIcon } from './GameVisuals';
 import { HERO_ACCENT, ItemIcon, RARITIES, passiveRarity } from './icons';
@@ -28,19 +28,16 @@ export function ClassDetailsPage({ hero, profile, onHero, onBack }: { hero: Hero
   const passives = PASSIVES.filter((passive) => passive.hero === hero);
   const passive = concept.kind === 'passive' ? passives.find((passive) => passive.id === concept.id) : undefined;
   const availability = (id: string) => {
-    const passive = passives.find((passive) => passive.id === id)!;
-    const achievement = ACHIEVEMENTS.find((achievement) => achievement.id === passive.unlockAchievement);
-    const requirements = [
-      ...(rank < (passive.masteryRequired ?? 0) ? [`Maîtrise ${passive.masteryRequired}`] : []),
-      ...(achievement && !profile.achievements.includes(achievement.id) ? [`Succès « ${achievement.name} »`] : []),
-    ];
-    return { locked: requirements.length > 0, text: requirements.length ? `Requis : ${requirements.join(' · ')}` : 'Disponible' };
+    const passive = passives.find((entry) => entry.id === id)!;
+    const locked = rank < (passive.masteryRequired ?? 0);
+    return { locked, text: locked ? `Maîtrise ${passive.masteryRequired} requise` : 'Disponible au départ' };
   };
+  const upcoming = [...STARTING_OPTIONS[hero].weapons.map((entry) => ({ ...entry, name: ITEMS.find((item) => item.id === entry.id)?.name })), ...STARTING_OPTIONS[hero].passives.map((entry) => ({ ...entry, name: PASSIVES.find((passive) => passive.id === entry.id)?.name }))].filter((entry) => entry.masteryRequired > rank).sort((a,b) => a.masteryRequired - b.masteryRequired);
   const title = passive?.name ?? (concept.kind === 'stat' ? STAT_INFO[concept.id].name : 'Maîtrise de classe');
-  const description = passive?.description ?? (concept.kind === 'stat' ? STAT_INFO[concept.id].description : 'Les niveaux gagnés entre les parties débloquent de nouveaux passifs.');
-  const detail = passive ? `${availability(passive.id).text} · Rang maximum ${passive.maxRank} · ${RARITIES[passiveRarity(passive.weight)].label}`
+  const description = passive?.description ?? (concept.kind === 'stat' ? STAT_INFO[concept.id].description : 'Les niveaux gagnés avec cette classe débloquent des passifs et équipements de départ pour les prochaines parties.');
+  const detail = passive ? `${availability(passive.id).text} · Passif de départ · ${RARITIES[passiveRarity(passive.weight)].label}`
     : concept.kind === 'stat' ? ''
-    : rank === MASTERY_MAX_RANK ? 'Maîtrise maximale atteinte.' : `${next - levels} niveaux avant le rang ${rank + 1}.`;
+    : rank === MASTERY_MAX_RANK ? 'Maîtrise maximale atteinte.' : `${next - levels} niveaux avant le rang ${rank + 1}.${upcoming.length ? ` Prochain déblocage (maîtrise ${upcoming[0].masteryRequired}) : ${upcoming.filter((entry) => entry.masteryRequired === upcoming[0].masteryRequired).map((entry) => entry.name).join(" · ")}.` : ""}`;
   const format = (key: keyof Stats, value: number) => key === 'critChance' ? `${Math.round(value * 100)} %` : key === 'critDamage' ? `×${value}` : String(value);
   return <main className="shell title-screen classes-page class-dossier" style={{ ['--accent' as string]: HERO_ACCENT[hero] }}>
     <SpaceBackdrop />

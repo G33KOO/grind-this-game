@@ -8,7 +8,6 @@ export const BALANCE = {
   defenseReductionCap: 0.72,
   minDamage: 1,
   baseActionTime: 1,
-  passivePicksPerOffer: 3,
   statPointsPerLevel: 2,
   respecAllowed: true,
   extraEffectChainLimit: 12,
@@ -32,42 +31,42 @@ export const HEROES: Record<HeroId, { name: string; stats: Stats; startingItem: 
   },
 };
 
-export interface StartOption { id: string; unlockAchievement?: string }
-/** Options de départ par classe : la première de chaque liste est le choix de base, toujours disponible. */
+export interface StartOption { id: string; masteryRequired: number }
+/** La maîtrise ouvre des choix de départ, sans remplacer les anciens. */
 export const STARTING_OPTIONS: Record<HeroId, { weapons: StartOption[]; passives: StartOption[] }> = {
   warrior: {
-    weapons: [{ id: 'iron-sword' }, { id: 'alpha-fang', unlockAchievement: 'forest-slain' }, { id: 'grave-blade', unlockAchievement: 'crypt-slain' }],
-    passives: [{ id: 'iron-skin' }, { id: 'battle-heart', unlockAchievement: 'ten-kills' }, { id: 'shielded', unlockAchievement: 'meadow-slain' }, { id: 'stone-heart', unlockAchievement: 'warrior-level-10' }],
+    weapons: [{ id: 'iron-sword', masteryRequired: 0 }, { id: 'duelist-blade', masteryRequired: 2 }, { id: 'ember-edge', masteryRequired: 4 }, { id: 'alpha-fang', masteryRequired: 6 }, { id: 'grave-blade', masteryRequired: 8 }],
+    passives: [{ id: 'iron-skin', masteryRequired: 0 }, { id: 'battle-heart', masteryRequired: 1 }, { id: 'shielded', masteryRequired: 2 }, { id: 'cleaving-blow', masteryRequired: 3 }, { id: 'unyielding', masteryRequired: 4 }, { id: 'fortress', masteryRequired: 5 }, { id: 'war-cry', masteryRequired: 6 }, { id: 'stone-heart', masteryRequired: 8 }, { id: 'living-bastion', masteryRequired: 10 }],
   },
   assassin: {
-    weapons: [{ id: 'duelist-blade' }, { id: 'alpha-fang', unlockAchievement: 'forest-slain' }, { id: 'grave-blade', unlockAchievement: 'crypt-slain' }],
-    passives: [{ id: 'quick-step' }, { id: 'keen-eye', unlockAchievement: 'ten-kills' }, { id: 'venom', unlockAchievement: 'meadow-slain' }, { id: 'lucky-dagger', unlockAchievement: 'assassin-level-10' }],
+    weapons: [{ id: 'duelist-blade', masteryRequired: 0 }, { id: 'iron-sword', masteryRequired: 2 }, { id: 'ember-edge', masteryRequired: 4 }, { id: 'alpha-fang', masteryRequired: 6 }, { id: 'grave-blade', masteryRequired: 8 }],
+    passives: [{ id: 'quick-step', masteryRequired: 0 }, { id: 'keen-eye', masteryRequired: 1 }, { id: 'venom', masteryRequired: 2 }, { id: 'bloodletting', masteryRequired: 3 }, { id: 'double-cut', masteryRequired: 4 }, { id: 'phantom', masteryRequired: 5 }, { id: 'deadly-aim', masteryRequired: 6 }, { id: 'lucky-dagger', masteryRequired: 8 }, { id: 'reaper', masteryRequired: 10 }],
   },
 };
 
 export const ITEMS: ItemDefinition[] = [
-  { id: 'iron-sword', name: 'Épée de fer', slot: 'weapon', description: '+3 force', stats: { strength: 3 }, rarity: 'common' },
-  { id: 'duelist-blade', name: 'Lame du duelliste', slot: 'weapon', description: '+2 force, +0,1 vitesse', stats: { strength: 2, speed: 0.1 }, rarity: 'common' },
-  { id: 'ember-edge', name: 'Lame braise', slot: 'weapon', description: '+5 force, brûlure corrosive', stats: { strength: 5 }, effects: [{ kind: 'poison', damage: 3, turns: 2 }], rarity: 'rare' },
-  { id: 'oak-buckler', name: 'Rondache de chêne', slot: 'armor', description: '+4 défense, bouclier au combat', stats: { defense: 4 }, effects: [{ kind: 'shield', amount: 8 }], rarity: 'common' },
+  { id: 'iron-sword', name: 'Épée de fer', slot: 'weapon', description: '+3 force, +4 défense', stats: { strength: 3, defense: 4 }, rarity: 'common' },
+  { id: 'duelist-blade', name: 'Lame du duelliste', slot: 'weapon', description: '+2 force, +0,1 vitesse, +8 % critique', stats: { strength: 2, speed: 0.1, critChance: 0.08 }, rarity: 'common' },
+  { id: 'ember-edge', name: 'Lame braise', slot: 'weapon', description: '+5 force, +0,3 dégâts critiques', stats: { strength: 5, critDamage: 0.3 }, rarity: 'rare' },
+  { id: 'oak-buckler', name: 'Rondache de chêne', slot: 'armor', description: '+4 défense, +12 PV maximum', stats: { defense: 4, maxHp: 12 }, rarity: 'common' },
   { id: 'trail-coat', name: 'Manteau de piste', slot: 'armor', description: '+3 défense, +5 PV', stats: { defense: 3, maxHp: 5 }, rarity: 'common' },
   { id: 'wraith-mail', name: 'Cotte spectrale', slot: 'armor', description: '+7 défense, -0,05 vitesse', stats: { defense: 7, speed: -0.05 }, rarity: 'epic', unlockAchievement: 'first-boss' },
   { id: 'lucky-coin', name: 'Pièce porte-bonheur', slot: 'charm', description: '+5 chance, +3 % critique', stats: { luck: 5, critChance: 0.03 }, rarity: 'rare' },
   { id: 'wolf-tooth', name: 'Croc de loup', slot: 'charm', description: '+2 force, +0,08 vitesse', stats: { strength: 2, speed: 0.08 }, rarity: 'common' },
   { id: 'heart-charm', name: 'Pendentif cœur', slot: 'charm', description: '+18 PV maximum', stats: { maxHp: 18 }, rarity: 'common' },
   { id: 'glass-eye', name: 'Œil de verre', slot: 'charm', description: '+12 % critique, dégâts critiques +0,2', stats: { critChance: 0.12, critDamage: 0.2 }, rarity: 'epic', unlockAchievement: 'ten-kills' },
-  { id: 'thorn-ring', name: 'Anneau d’épines', slot: 'charm', description: '+3 défense', stats: { defense: 3 }, effects: [{ kind: 'cleave', ratio: 0.25 }], rarity: 'rare' },
-  { id: 'vampire-seal', name: 'Sceau vampire', slot: 'charm', description: 'Vol de vie 12 %', effects: [{ kind: 'lifesteal', ratio: 0.12 }], rarity: 'epic', unlockAchievement: 'first-boss' },
+  { id: 'thorn-ring', name: 'Anneau d’épines', slot: 'charm', description: '+3 défense, +3 force', stats: { defense: 3, strength: 3 }, rarity: 'rare' },
+  { id: 'vampire-seal', name: 'Sceau vampire', slot: 'charm', description: '+25 PV maximum, +0,12 vitesse', stats: { maxHp: 25, speed: 0.12 }, rarity: 'epic', unlockAchievement: 'first-boss' },
   { id: 'small-potion', name: 'Potion mineure', slot: 'consumable', description: 'Rend 35 PV', heal: 35, rarity: 'common' },
   { id: 'greater-potion', name: 'Potion forte', slot: 'consumable', description: 'Rend 80 PV', heal: 80, rarity: 'rare' },
   { id: 'slime-core', name: 'Noyau gélatineux', slot: 'charm', description: '+25 PV maximum, +1 défense', stats: { maxHp: 25, defense: 1 }, rarity: 'uncommon', unlockAchievement: 'meadow-slain' },
   { id: 'hunter-totem', name: 'Totem du chasseur', slot: 'charm', description: '+3 force, +6 chance', stats: { strength: 3, luck: 6 }, rarity: 'rare', unlockAchievement: 'twenty-five-kills' },
   { id: 'alpha-fang', name: 'Croc de l’alpha', slot: 'weapon', description: '+4 force, +0,15 vitesse', stats: { strength: 4, speed: 0.15 }, rarity: 'rare', unlockAchievement: 'forest-slain' },
   { id: 'mist-cloak', name: 'Voile de brume', slot: 'armor', description: '+5 défense, +0,08 vitesse', stats: { defense: 5, speed: 0.08 }, rarity: 'rare', unlockAchievement: 'marsh-slain' },
-  { id: 'grave-blade', name: 'Lame du tombeau', slot: 'weapon', description: '+8 force, poison tenace', stats: { strength: 8 }, effects: [{ kind: 'poison', damage: 4, turns: 3 }], rarity: 'epic', unlockAchievement: 'crypt-slain' },
+  { id: 'grave-blade', name: 'Lame du tombeau', slot: 'weapon', description: '+8 force, +0,4 dégâts critiques', stats: { strength: 8, critDamage: 0.4 }, rarity: 'epic', unlockAchievement: 'crypt-slain' },
   { id: 'star-shard', name: 'Éclat d’étoile', slot: 'charm', description: '+8 chance, +5 % critique', stats: { luck: 8, critChance: 0.05 }, rarity: 'epic', unlockAchievement: 'explorer' },
   { id: 'veteran-plate', name: 'Plastron du vétéran', slot: 'armor', description: '+6 défense, +20 PV maximum', stats: { defense: 6, maxHp: 20 }, rarity: 'epic', unlockAchievement: 'level-10' },
-  { id: 'war-banner', name: 'Étendard de guerre', slot: 'charm', description: '+4 force, 15 % de dégâts aux autres ennemis', stats: { strength: 4 }, effects: [{ kind: 'cleave', ratio: 0.15 }], rarity: 'legendary', unlockAchievement: 'warrior-mastery-4' },
+  { id: 'war-banner', name: 'Étendard de guerre', slot: 'charm', description: '+6 force, +4 défense', stats: { strength: 6, defense: 4 }, rarity: 'legendary', unlockAchievement: 'warrior-mastery-4' },
   { id: 'night-mantle', name: 'Manteau de nuit', slot: 'armor', description: '+4 défense, +0,2 vitesse, +6 % critique', stats: { defense: 4, speed: 0.2, critChance: 0.06 }, rarity: 'legendary', unlockAchievement: 'assassin-mastery-4' },
 ];
 
@@ -110,24 +109,24 @@ const BONUS_LOOT: Record<string, { itemId: string; weight: number }[]> = {
 for (const enemy of ENEMIES) enemy.loot = [...enemy.loot, ...(BONUS_LOOT[enemy.id] ?? [])];
 
 export const PASSIVES: PassiveDefinition[] = [
-  { id: 'iron-skin', name: 'Peau de fer', description: '+2 défense par rang', hero: 'warrior', maxRank: 3, weight: 5, stats: { defense: 2 } },
-  { id: 'battle-heart', name: 'Cœur de bataille', description: '+12 PV max par rang', hero: 'warrior', maxRank: 3, weight: 4, stats: { maxHp: 12 } },
-  { id: 'shielded', name: 'Garde assurée', description: 'Bouclier initial +8 par rang', hero: 'warrior', maxRank: 3, weight: 3, effects: [{ kind: 'shield', amount: 8 }] },
-  { id: 'cleaving-blow', name: 'Frappe circulaire', description: '25 % de dégâts aux autres ennemis', hero: 'warrior', maxRank: 2, weight: 2, effects: [{ kind: 'cleave', ratio: 0.25 }] },
-  { id: 'unyielding', name: 'Inébranlable', description: '+15 % dégâts sous 35 % PV', hero: 'warrior', maxRank: 2, weight: 1, effects: [{ kind: 'lowHealthDamage', ratio: 0.15 }] },
-  { id: 'fortress', name: 'Forteresse', description: 'Convertit 20 % défense en force', hero: 'warrior', maxRank: 2, weight: 0.7, masteryRequired: 2, effects: [{ kind: 'defenseDamage', ratio: 0.2 }] },
-  { id: 'quick-step', name: 'Pas vif', description: '+0,12 vitesse par rang', hero: 'assassin', maxRank: 3, weight: 5, stats: { speed: 0.12 } },
-  { id: 'keen-eye', name: 'Œil acéré', description: '+5 % critique par rang', hero: 'assassin', maxRank: 3, weight: 4, stats: { critChance: 0.05 } },
-  { id: 'venom', name: 'Venin', description: 'Vos attaques empoisonnent', hero: 'assassin', maxRank: 3, weight: 3, effects: [{ kind: 'poison', damage: 4, turns: 2 }] },
-  { id: 'bloodletting', name: 'Saignée', description: 'Vol de vie 8 %', hero: 'assassin', maxRank: 2, weight: 2, effects: [{ kind: 'lifesteal', ratio: 0.08 }] },
-  { id: 'double-cut', name: 'Double entaille', description: '25 % dégâts en frappe supplémentaire', hero: 'assassin', maxRank: 2, weight: 1, effects: [{ kind: 'extraStrike', ratio: 0.25 }] },
-  { id: 'phantom', name: 'Danse fantôme', description: '+0,2 vitesse et critique +8 %', hero: 'assassin', maxRank: 2, weight: 0.7, masteryRequired: 3, stats: { speed: 0.2, critChance: 0.08 } },
-  { id: 'war-cry', name: 'Cri de guerre', description: '+3 force par rang', hero: 'warrior', maxRank: 3, weight: 2.5, masteryRequired: 2, stats: { strength: 3 } },
-  { id: 'stone-heart', name: 'Cœur de pierre', description: '+25 PV max par rang', hero: 'warrior', maxRank: 2, weight: 1.5, unlockAchievement: 'warrior-level-10', stats: { maxHp: 25 } },
-  { id: 'living-bastion', name: 'Bastion vivant', description: '+3 défense par rang, 15 % de la défense convertie en force', hero: 'warrior', maxRank: 2, weight: 0.6, masteryRequired: 5, stats: { defense: 3 }, effects: [{ kind: 'defenseDamage', ratio: 0.15 }] },
-  { id: 'deadly-aim', name: 'Visée mortelle', description: 'Dégâts critiques +0,25 par rang', hero: 'assassin', maxRank: 3, weight: 2.5, masteryRequired: 2, stats: { critDamage: 0.25 } },
-  { id: 'lucky-dagger', name: 'Lame chanceuse', description: '+4 chance et +2 % critique par rang', hero: 'assassin', maxRank: 3, weight: 1.5, unlockAchievement: 'assassin-level-10', stats: { luck: 4, critChance: 0.02 } },
-  { id: 'reaper', name: 'Faucheur', description: '+0,1 vitesse, 30 % dégâts en frappe supplémentaire', hero: 'assassin', maxRank: 2, weight: 0.6, masteryRequired: 5, stats: { speed: 0.1 }, effects: [{ kind: 'extraStrike', ratio: 0.3 }] },
+  { id: 'iron-skin', name: 'Peau de fer', description: 'Rempart : +2 défense et un bouclier de 8 PV à chaque combat.', hero: 'warrior', maxRank: 1, weight: 5, masteryRequired: 0, stats: { defense: 2 }, effects: [{ kind: 'shield', amount: 8 }] },
+  { id: 'battle-heart', name: 'Cœur de bataille', description: 'Endurance : +12 PV maximum et vol de vie de 8 %.', hero: 'warrior', maxRank: 1, weight: 4, masteryRequired: 1, stats: { maxHp: 12 }, effects: [{ kind: 'lifesteal', ratio: 0.08 }] },
+  { id: 'shielded', name: 'Garde assurée', description: 'Protecteur : un bouclier de 24 PV à chaque combat.', hero: 'warrior', maxRank: 1, weight: 3, masteryRequired: 2, effects: [{ kind: 'shield', amount: 24 }] },
+  { id: 'cleaving-blow', name: 'Frappe circulaire', description: 'Briseur de groupes : 35 % des dégâts infligés aux autres ennemis.', hero: 'warrior', maxRank: 1, weight: 2, masteryRequired: 3, effects: [{ kind: 'cleave', ratio: 0.35 }] },
+  { id: 'unyielding', name: 'Inébranlable', description: 'Berserker : +40 % de dégâts sous 35 % des PV maximum.', hero: 'warrior', maxRank: 1, weight: 1, masteryRequired: 4, effects: [{ kind: 'lowHealthDamage', ratio: 0.4 }] },
+  { id: 'fortress', name: 'Forteresse', description: 'Forteresse : 60 % de la défense ajoutée aux dégâts de chaque attaque.', hero: 'warrior', maxRank: 1, weight: 0.7, masteryRequired: 5, effects: [{ kind: 'defenseDamage', ratio: 0.6 }] },
+  { id: 'war-cry', name: 'Cri de guerre', description: 'Sous 35 % PV : +25 % dégâts. 25 % dégâts aux autres ennemis.', hero: 'warrior', maxRank: 1, weight: 2.5, masteryRequired: 6, effects: [{ kind: 'lowHealthDamage', ratio: 0.25 }, { kind: 'cleave', ratio: 0.25 }] },
+  { id: 'stone-heart', name: 'Cœur de pierre', description: 'Colosse : +25 PV maximum, vol de vie de 12 %, -0,1 vitesse.', hero: 'warrior', maxRank: 1, weight: 1.5, masteryRequired: 8, stats: { maxHp: 25, speed: -0.1 }, effects: [{ kind: 'lifesteal', ratio: 0.12 }] },
+  { id: 'living-bastion', name: 'Bastion vivant', description: 'Bastion : 40 % de la défense ajoutée aux dégâts, bouclier de 16 PV à chaque combat.', hero: 'warrior', maxRank: 1, weight: 0.6, masteryRequired: 10, effects: [{ kind: 'defenseDamage', ratio: 0.4 }, { kind: 'shield', amount: 16 }] },
+  { id: 'quick-step', name: 'Pas vif', description: 'Duelliste : +0,12 vitesse et une frappe supplémentaire à 20 % des dégâts.', hero: 'assassin', maxRank: 1, weight: 5, masteryRequired: 0, stats: { speed: 0.12 }, effects: [{ kind: 'extraStrike', ratio: 0.2 }] },
+  { id: 'keen-eye', name: 'Œil acéré', description: 'Critiques : +15 % de chance de critique et +0,3 dégâts critiques.', hero: 'assassin', maxRank: 1, weight: 4, masteryRequired: 1, stats: { critChance: 0.15, critDamage: 0.3 } },
+  { id: 'venom', name: 'Venin', description: 'Empoisonneur : chaque attaque applique un poison de 4 dégâts pendant 3 tours.', hero: 'assassin', maxRank: 1, weight: 3, masteryRequired: 2, effects: [{ kind: 'poison', damage: 4, turns: 3 }] },
+  { id: 'bloodletting', name: 'Saignée', description: 'Vampire : vol de vie de 16 %.', hero: 'assassin', maxRank: 1, weight: 2, masteryRequired: 3, effects: [{ kind: 'lifesteal', ratio: 0.16 }] },
+  { id: 'double-cut', name: 'Double entaille', description: 'Double frappe : une frappe supplémentaire à 40 % des dégâts.', hero: 'assassin', maxRank: 1, weight: 1, masteryRequired: 4, effects: [{ kind: 'extraStrike', ratio: 0.4 }] },
+  { id: 'phantom', name: 'Danse fantôme', description: 'Danseur : +0,2 vitesse, vol de vie de 8 %.', hero: 'assassin', maxRank: 1, weight: 0.7, masteryRequired: 5, stats: { speed: 0.2 }, effects: [{ kind: 'lifesteal', ratio: 0.08 }] },
+  { id: 'deadly-aim', name: 'Visée mortelle', description: 'Exécuteur : +0,8 dégâts critiques, -5 % de chance de critique.', hero: 'assassin', maxRank: 1, weight: 2.5, masteryRequired: 6, stats: { critDamage: 0.8, critChance: -0.05 } },
+  { id: 'lucky-dagger', name: 'Lame chanceuse', description: 'Chasseur de butin : +4 chance et une frappe supplémentaire à 15 % des dégâts.', hero: 'assassin', maxRank: 1, weight: 1.5, masteryRequired: 8, stats: { luck: 4 }, effects: [{ kind: 'extraStrike', ratio: 0.15 }] },
+  { id: 'reaper', name: 'Faucheur', description: 'Faucheur : une frappe supplémentaire à 25 % des dégâts, vol de vie de 8 %.', hero: 'assassin', maxRank: 1, weight: 0.6, masteryRequired: 10, effects: [{ kind: 'extraStrike', ratio: 0.25 }, { kind: 'lifesteal', ratio: 0.08 }] },
 ];
 
 export const ZONES = [
@@ -151,6 +150,19 @@ export const validateContent = (): string[] => {
   const validEffects = (effects: readonly { kind: string; [key: string]: unknown }[] | undefined) =>
     !effects || effects.every((effect) => Object.entries(effect).every(([key, value]) =>
       key === 'kind' || (typeof value === 'number' && Number.isFinite(value))));
+  for (const hero of ['warrior', 'assassin'] as const) {
+    const options = STARTING_OPTIONS[hero];
+    for (const option of [...options.weapons, ...options.passives]) {
+      if (!Number.isInteger(option.masteryRequired) || option.masteryRequired < 0 || option.masteryRequired > MASTERY_MAX_RANK) errors.push(`${option.id}: maîtrise de départ invalide.`);
+    }
+    if (options.weapons[0]?.masteryRequired !== 0 || options.passives[0]?.masteryRequired !== 0) errors.push(`${hero}: choix de base manquant.`);
+    for (const option of options.weapons) {
+      if (!ITEMS.some((item) => item.id === option.id && item.slot === 'weapon')) errors.push(`${hero}: équipement de départ inconnu ${option.id}.`);
+    }
+    for (const option of options.passives) {
+      if (!PASSIVES.some((passive) => passive.id === option.id && passive.hero === hero && passive.masteryRequired === option.masteryRequired)) errors.push(`${hero}: passif de départ incohérent ${option.id}.`);
+    }
+  }
   if (ids.some((id) => !id.trim())) errors.push('Un identifiant de contenu est vide.');
   for (const item of ITEMS) {
     if (!validNumbers(item.stats) || !validEffects(item.effects)) errors.push(`${item.id}: bonus invalide.`);
@@ -196,17 +208,17 @@ export const validateContent = (): string[] => {
 
 export const ACHIEVEMENTS: AchievementDefinition[] = [
   { id: 'first-kill', name: 'Premier sang', description: 'Vaincre un monstre.', condition: { kind: 'kills', value: 1 } },
-  { id: 'ten-kills', name: 'Chasseur', description: 'Vaincre dix monstres en une partie.', condition: { kind: 'kills', value: 10 }, unlocks: ['glass-eye', 'phantom'] },
+  { id: 'ten-kills', name: 'Chasseur', description: 'Vaincre dix monstres en une partie.', condition: { kind: 'kills', value: 10 }, unlocks: ['glass-eye'] },
   { id: 'twenty-five-kills', name: 'Tueur', description: 'Vaincre 25 monstres en une partie.', condition: { kind: 'kills', value: 25 }, unlocks: ['hunter-totem'] },
   { id: 'meadow-slain', name: 'Reine détrônée', description: 'Vaincre la Reine gélatineuse.', condition: { kind: 'boss', value: 'meadow-boss' }, unlocks: ['slime-core'] },
   { id: 'forest-slain', name: 'Maître de la meute', description: 'Vaincre l’Alpha des bois.', condition: { kind: 'boss', value: 'forest-boss' }, unlocks: ['alpha-fang'] },
   { id: 'marsh-slain', name: 'Chasseur de spectres', description: 'Vaincre le Spectre du marais.', condition: { kind: 'boss', value: 'marsh-boss' }, unlocks: ['mist-cloak'] },
   { id: 'crypt-slain', name: 'Profanateur', description: 'Vaincre le Seigneur de la crypte.', condition: { kind: 'boss', value: 'crypt-boss' }, unlocks: ['grave-blade'] },
-  { id: 'first-boss', name: 'Briseur de sceau', description: 'Vaincre le Gardien.', condition: { kind: 'boss', value: 'final-boss' }, unlocks: ['wraith-mail', 'vampire-seal', 'fortress'], path: 'ashen-path' },
+  { id: 'first-boss', name: 'Briseur de sceau', description: 'Vaincre le Gardien.', condition: { kind: 'boss', value: 'final-boss' }, unlocks: ['wraith-mail', 'vampire-seal'], path: 'ashen-path' },
   { id: 'explorer', name: 'Curieux', description: 'Découvrir les deux secrets.', condition: { kind: 'secrets', value: 2 }, unlocks: ['star-shard'] },
   { id: 'level-10', name: 'Vétéran', description: 'Atteindre le niveau 10.', condition: { kind: 'level', value: 10 }, unlocks: ['veteran-plate'] },
-  { id: 'warrior-level-10', name: 'Rempart vivant', description: 'Atteindre le niveau 10 avec le Guerrier.', hero: 'warrior', condition: { kind: 'level', value: 10 }, unlocks: ['stone-heart'] },
-  { id: 'assassin-level-10', name: 'Lame chanceuse', description: 'Atteindre le niveau 10 avec l’Assassin.', hero: 'assassin', condition: { kind: 'level', value: 10 }, unlocks: ['lucky-dagger'] },
+  { id: 'warrior-level-10', name: 'Rempart vivant', description: 'Atteindre le niveau 10 avec le Guerrier.', hero: 'warrior', condition: { kind: 'level', value: 10 } },
+  { id: 'assassin-level-10', name: 'Lame chanceuse', description: 'Atteindre le niveau 10 avec l’Assassin.', hero: 'assassin', condition: { kind: 'level', value: 10 } },
   { id: 'warrior-mastery-4', name: 'Maître d’armes', description: 'Atteindre la maîtrise 4 du Guerrier.', hero: 'warrior', condition: { kind: 'masteryRank', value: 4 }, unlocks: ['war-banner'] },
   { id: 'assassin-mastery-4', name: 'Maître de l’ombre', description: 'Atteindre la maîtrise 4 de l’Assassin.', hero: 'assassin', condition: { kind: 'masteryRank', value: 4 }, unlocks: ['night-mantle'] },
 ];

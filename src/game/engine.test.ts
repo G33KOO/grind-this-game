@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { ENEMIES, validateContent } from './content';
 import {
-  addAchievements, advanceEncounter, allocatePoints, canDrop, choosePassive, decodeRun, deriveStats,
-  damageAfterDefense, equipItem, gainExperience, initialProfile, newRun, passiveChoices, respecStats, rollLoot,
+  addAchievements, advanceEncounter, allocatePoints, canDrop, decodeRun, deriveStats,
+  damageAfterDefense, equipItem, gainExperience, initialProfile, newRun, respecStats, rollLoot,
   startCombat, stepCombat, validateRun,
 } from './engine';
 import type { CombatState, RunState } from './types';
@@ -15,11 +15,11 @@ describe('content and core rules', () => {
   it('uses a stable inverse-speed action timeline, including fractional ratios', () => {
     const run = newRun('assassin', 42);
     const combat = startCombat(run, ['slime']);
-    expect(combat.playerNextAction).toBeCloseTo(1 / 1.35);
+    expect(combat.playerNextAction).toBeCloseTo(1 / 1.47);
     expect(combat.enemies[0].nextAction).toBeCloseTo(1 / 0.7);
     const next = stepCombat(combat);
-    expect(next.time).toBeCloseTo(1 / 1.35);
-    expect(next.playerNextAction).toBeCloseTo(2 / 1.35);
+    expect(next.time).toBeCloseTo(1 / 1.47);
+    expect(next.playerNextAction).toBeCloseTo(2 / 1.47);
     expect(next.enemies[0].nextAction).toBeCloseTo(1 / 0.7);
   });
 
@@ -119,17 +119,20 @@ describe('content and core rules', () => {
     }
   });
 
-  it('queues each fifth level, offers class passives, and enforces rank limits', () => {
-    let run = { ...newRun('warrior'), xp: 1_000_000 };
-    run = gainExperience(run, 0);
-    expect(run.pendingPassivePicks).toBeGreaterThan(1);
-    const choices = passiveChoices(run, initialProfile());
-    expect(choices.length).toBe(3);
-    expect(choices.every((id) => !id.startsWith('quick-') && !id.startsWith('venom'))).toBe(true);
-    let ranked = { ...run, pendingPassivePicks: 4, passives: [{ id: 'iron-skin', rank: 3 }] };
-    expect(passiveChoices(ranked, initialProfile())).not.toContain('iron-skin');
-    ranked = choosePassive(ranked, 'iron-skin');
-    expect(ranked.passives[0].rank).toBe(3);
+  it('levels up without random passive choices or changing the starting passive', () => {
+    const initial = newRun('warrior');
+    const run = gainExperience({ ...initial, pendingPassivePicks: 4 }, 1_000_000);
+    expect(run.level).toBeGreaterThan(10);
+    expect(run.unspentPoints).toBe((run.level - 1) * 2);
+    expect(run.pendingPassivePicks).toBe(0);
+    expect(run.passives).toEqual(initial.passives);
+  });
+
+  it('clears legacy pending choices when loading and preserves acquired passives', () => {
+    const old = { ...newRun('warrior'), pendingPassivePicks: 3, passives: [{ id: 'fortress', rank: 2 }] };
+    const migrated = decodeRun(JSON.stringify(old));
+    expect(migrated.pendingPassivePicks).toBe(0);
+    expect(migrated.passives).toEqual(old.passives);
   });
 
   it('makes encounters independent of movement update chunking', () => {

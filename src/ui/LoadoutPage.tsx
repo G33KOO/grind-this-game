@@ -1,65 +1,53 @@
-﻿import { useState } from 'react';
-import { ACHIEVEMENTS, HEROES, ITEMS, PASSIVES, STARTING_OPTIONS, type StartOption } from '../game/content';
+import { useState } from 'react';
+import { HEROES, ITEMS, PASSIVES, STARTING_OPTIONS, masteryRank, type StartOption } from '../game/content';
 import { isStartOptionUnlocked, type Loadout } from '../game/engine';
 import type { HeroId, Profile } from '../game/types';
-import { HERO_ACCENT, HeroGlyph, ItemIcon, RARITIES, passiveRarity, type Rarity } from './icons';
-import { HeroPortrait, MenuFooter } from './GameVisuals';
+import { HERO_ACCENT, ItemIcon, RARITIES, passiveRarity, type Rarity } from './icons';
+import { HeroPortrait } from './GameVisuals';
 import { SpaceBackdrop } from './SpaceBackdrop';
+import './loadout-page.css';
 
-interface OptionView { id: string; name: string; description: string; rarity: Rarity }
-
-function OptionGroup({ title, options, describe, selected, onSelect, profile }: {
-  title: string; options: StartOption[]; describe: (id: string) => OptionView; selected: string; onSelect: (id: string) => void; profile: Profile;
-}) {
-  return <section className="loadout-group">
-    <h3>{title}</h3>
-    <div className="passive-grid">
-      {options.map((option) => {
-        const view = describe(option.id);
-        const unlocked = isStartOptionUnlocked(option, profile);
-        const achievement = ACHIEVEMENTS.find((entry) => entry.id === option.unlockAchievement);
-        return <button key={option.id} type="button" disabled={!unlocked} aria-pressed={selected === option.id}
-          className={`reward-tile loadout-option rarity-${view.rarity}${unlocked ? '' : ' locked'}${selected === option.id ? ' is-selected' : ''}`}
-          style={{ borderColor: RARITIES[view.rarity].color }} onClick={() => onSelect(option.id)}>
-          <ItemIcon id={option.id} rarity={view.rarity} size={48} />
-          <div>
-            <small style={{ color: RARITIES[view.rarity].color }}>{RARITIES[view.rarity].label}{option.id === options[0].id ? ' · de base' : ''}</small>
-            <strong>{view.name}</strong><span>{view.description}</span>
-            <em>{unlocked ? (selected === option.id ? '✔ Sélectionné' : 'Disponible') : `🔒 Succès « ${achievement?.name ?? '?'} »`}</em>
-          </div>
-        </button>;
-      })}
-    </div>
-  </section>;
-}
-
+interface OptionView { name: string; description: string; rarity: Rarity }
 const describeWeapon = (id: string): OptionView => {
   const item = ITEMS.find((entry) => entry.id === id);
-  return { id, name: item?.name ?? id, description: item?.description ?? '', rarity: (item?.rarity ?? 'common') as Rarity };
+  return { name: item?.name ?? id, description: item?.description ?? '', rarity: (item?.rarity ?? 'common') as Rarity };
 };
 const describePassive = (id: string): OptionView => {
   const passive = PASSIVES.find((entry) => entry.id === id);
-  return { id, name: passive?.name ?? id, description: passive?.description ?? '', rarity: passiveRarity(passive?.weight ?? 5) };
+  return { name: passive?.name ?? id, description: passive?.description ?? '', rarity: passiveRarity(passive?.weight ?? 5) };
 };
-
-export function LoadoutPage({ hero, profile, onStart, onBack }: { hero: HeroId; profile: Profile; onStart: (loadout: Required<Loadout>) => void; onBack: () => void }) {
+function OptionGroup({ title, options, describe, selected, onSelect, profile, hero }: {
+  title: string; options: StartOption[]; describe(id: string): OptionView; selected: string; onSelect(id: string): void; profile: Profile; hero: HeroId;
+}) {
+  const [focused, setFocused] = useState(selected);
+  const option = options.find((entry) => entry.id === focused)!;
+  const view = describe(focused);
+  const unlocked = isStartOptionUnlocked(option, profile, hero);
+  return <section className="starting-group" aria-label={title}>
+    <h2>{title}</h2>
+    <div className={`starting-options${options.length > 4 ? " is-large" : ""}`}>{options.map((entry) => {
+      const item = describe(entry.id);
+      const available = isStartOptionUnlocked(entry, profile, hero);
+      return <button key={entry.id} aria-pressed={selected === entry.id} aria-label={`${item.name}, ${available ? selected === entry.id ? 'sélectionné' : 'disponible' : 'verrouillé, voir le déblocage'}`} className={`starting-option${available ? '' : ' is-locked'}${focused === entry.id ? ' is-focused' : ''}`} style={{ ['--rarity' as string]: RARITIES[item.rarity].color }} onClick={() => { setFocused(entry.id); if (available) onSelect(entry.id); }}>
+        <ItemIcon id={entry.id} rarity={item.rarity} size={56} /><span>{item.name}</span>
+        {!available && <svg className="starting-lock" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true"><rect x="5" y="10" width="14" height="11" rx="2" /><path d="M8 10V7a4 4 0 0 1 8 0v3" /></svg>}
+        {selected === entry.id && <span className="starting-check" aria-hidden="true">✓</span>}
+      </button>;
+    })}</div>
+    <div className="starting-description" aria-live="polite" style={{ ['--rarity' as string]: RARITIES[view.rarity].color }}><strong>{view.name}</strong><small>{RARITIES[view.rarity].label}{` · maîtrise ${option.masteryRequired}`}</small><p>{view.description}</p><span>{unlocked ? focused === selected ? 'Sélectionné' : 'Disponible' : `Maîtrise ${option.masteryRequired} requise`}</span></div>
+  </section>;
+}
+export function LoadoutPage({ hero, profile, onStart, onBack }: { hero: HeroId; profile: Profile; onStart(loadout: Required<Loadout>): void; onBack(): void }) {
   const options = STARTING_OPTIONS[hero];
   const [weapon, setWeapon] = useState(options.weapons[0].id);
   const [passive, setPassive] = useState(options.passives[0].id);
-  return <main className="shell title-screen classes-page" style={{ ['--accent' as string]: HERO_ACCENT[hero] }}>
-    <SpaceBackdrop />
-    <header className="classes-head">
-      <h2><HeroGlyph hero={hero} size={20} /> {HEROES[hero].name} · équipement de départ</h2>
-    </header>
-    <section className="panel page-panel loadout-panel">
-      <aside className="loadout-character"><HeroPortrait hero={hero} /><p className="eyebrow">CHOISISSEZ VOTRE VOIE</p><h2>{HEROES[hero].name}</h2><p>{hero === 'warrior' ? 'Tenez la ligne. Brisez le seuil.' : 'Frappez vite. Ne laissez aucune trace.'}</p></aside>
-      <div className="loadout-selection">
-      <OptionGroup title="Arme de départ" options={options.weapons} describe={describeWeapon} selected={weapon} onSelect={setWeapon} profile={profile} />
-      <OptionGroup title="Passif de départ" options={options.passives} describe={describePassive} selected={passive} onSelect={setPassive} profile={profile} />
-      <p className="small-note">De nouvelles armes et de nouveaux passifs de départ se débloquent avec les succès.</p>
-      <div className="loadout-actions"><button className="primary" onClick={() => onStart({ weapon, passive })}>Commencer la partie</button></div>
-      </div><MenuFooter />
-    </section>
-    <div className="page-bottom-actions"><button onClick={onBack}>Retour au choix de classe</button></div>
+  return <main className="shell title-screen classes-page starting-screen" style={{ ['--accent' as string]: HERO_ACCENT[hero] }}>
+    <SpaceBackdrop /><h1>Équipement de départ</h1>
+    <div className="starting-board">
+      <OptionGroup title="Arme" options={options.weapons} describe={describeWeapon} selected={weapon} onSelect={setWeapon} profile={profile} hero={hero} />
+      <section className="starting-hero" aria-label={HEROES[hero].name}><h2>{HEROES[hero].name}</h2><span className="starting-mastery">Maîtrise {masteryRank(profile.mastery[hero])}</span><div className="starting-portrait"><HeroPortrait hero={hero} /></div><div className="starting-equipped" aria-label="Équipement sélectionné"><ItemIcon id={weapon} rarity={describeWeapon(weapon).rarity} size={40} /><ItemIcon id={passive} rarity={describePassive(passive).rarity} size={40} /></div></section>
+      <OptionGroup title="Passif" options={options.passives} describe={describePassive} selected={passive} onSelect={setPassive} profile={profile} hero={hero} />
+    </div>
+    <footer className="starting-actions"><button className="primary" onClick={() => onStart({ weapon, passive })}>Commencer la partie</button><button onClick={onBack}>Retour au choix de classe</button></footer>
   </main>;
 }

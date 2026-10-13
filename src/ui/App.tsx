@@ -1,9 +1,9 @@
 ﻿import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Phaser from 'phaser';
-import { ACHIEVEMENTS, BALANCE, ENEMIES, HEROES, ITEMS, PASSIVES, ZONES, masteryLevelsForRank, masteryRank, MASTERY_MAX_RANK } from '../game/content';
+import { ACHIEVEMENTS, BALANCE, ENEMIES, HEROES, ITEMS, PASSIVES, ZONES, masteryLevelsForRank, masteryRank, MASTERY_MAX_RANK, STARTING_OPTIONS } from '../game/content';
 import {
-  addAchievements, advanceEncounter, allocatePoints, applyProgress, choosePassive, deriveStats,
-  gainExperience, initialProfile, newRun, passiveChoices, resolveLoadout, rollEncounter,
+  addAchievements, advanceEncounter, allocatePoints, applyProgress, deriveStats,
+  gainExperience, initialProfile, newRun, resolveLoadout, rollEncounter,
   respecStats, rollLoot, startCombat, stepCombat,
 } from '../game/engine';
 import type { Loadout } from '../game/engine';
@@ -55,7 +55,6 @@ export function App() {
   const [devEnemy, setDevEnemy] = useState(ENEMIES[0].id);
   const [notice, setNotice] = useState('');
   const [recap, setRecap] = useState<CombatRecapData | null>(null);
-  const [passiveOffers, setPassiveOffers] = useState<string[]>([]);
   const gameRef = useRef<Phaser.Game | null>(null);
   const sceneRef = useRef<PlatformScene | null>(null);
   const encounterBarRef = useRef<HTMLElement | null>(null);
@@ -107,14 +106,7 @@ export function App() {
       setDevelopmentMode(saved.developerMode);
       const profileSaved = updateProfile(addAchievements(profileRef.current, saved));
       if (saved.result === 'active') {
-        if (saved.pendingCombat) {
-          setScreen('world');
-        } else if (saved.pendingPassivePicks > 0) {
-          setPassiveOffers(passiveChoices(saved, profileRef.current));
-          setScreen('stats');
-        } else {
-          setScreen('world');
-        }
+        setScreen('world');
       } else {
         if (profileSaved) await saveRun(null);
         setScreen('summary');
@@ -328,10 +320,7 @@ export function App() {
       return;
     }
     syncCombat(null);
-    if (updated.pendingPassivePicks > 0 && updated.result === 'active') {
-      setPassiveOffers(passiveChoices(updated, profileRef.current));
-      setScreen('stats');
-    } else if (updated.result !== 'active') {
+    if (updated.result !== 'active') {
       if (profileSaved) {
         try { await saveRun(null); }
         catch (saveError) { setError(saveError instanceof Error ? `Partie terminée, impossible d’effacer la sauvegarde active : ${saveError.message}` : 'Partie terminée, effacement de sauvegarde impossible.'); }
@@ -344,16 +333,10 @@ export function App() {
   }, [syncCombat, syncRun, updateProfile]);
 
   const continueAfterCombat = () => {
-    const updated = runRef.current;
     setRecap(null);
     syncCombat(null);
-    if (updated && updated.pendingPassivePicks > 0) {
-      setPassiveOffers(passiveChoices(updated, profileRef.current));
-      setScreen('stats');
-    } else {
-      setScreen('world');
-      sceneRef.current?.togglePause(false);
-    }
+    setScreen('world');
+    sceneRef.current?.togglePause(false);
   };
 
   useEffect(() => {
@@ -447,19 +430,6 @@ export function App() {
   const persistRun = (updated: RunState) => {
     syncRun(updated);
     void saveRun(updated).catch((saveError: unknown) => setError(saveError instanceof Error ? saveError.message : 'Échec de sauvegarde.'));
-  };
-
-  const clickPassive = (id: string) => {
-    if (!run) return;
-    const updated = choosePassive(run, id);
-    if (updated === run) return;
-    persistRun(updated);
-    setPassiveOffers([]);
-    if (updated.pendingPassivePicks > 0) setPassiveOffers(passiveChoices(updated, profile));
-    else {
-      setScreen('world');
-      sceneRef.current?.togglePause(false);
-    }
   };
 
   const pickStat = (key: keyof typeof HEROES.warrior.stats, amount: number) => {
@@ -558,7 +528,7 @@ export function App() {
       <nav aria-label="Menu du jeu">
         <button aria-label="Zones et butins" data-tip="Zones, monstres et probabilités de butin (L)" disabled={screen === 'combat'} onClick={() => setScreen('loot')}><MenuIcon id="loot" /><kbd>L</kbd></button>
         <button aria-label="Inventaire" data-tip="Inventaire et équipement (I)" disabled={screen === 'combat'} onClick={openInventory}><MenuIcon id="inventory" /><kbd>I</kbd></button>
-        <button className={run.unspentPoints + run.pendingPassivePicks > 0 ? 'has-alert' : ''} aria-label={run.unspentPoints + run.pendingPassivePicks > 0 ? `Personnage : ${run.unspentPoints} point(s) à répartir, ${run.pendingPassivePicks} passif(s) à choisir` : 'Personnage'} data-tip={run.unspentPoints + run.pendingPassivePicks > 0 ? `${run.unspentPoints} point(s) à répartir · ${run.pendingPassivePicks} passif(s) à choisir (C)` : 'Statistiques, maîtrise et passifs (C)'} disabled={screen === 'combat'} onClick={() => { if (run.pendingPassivePicks > 0) setPassiveOffers(passiveChoices(run, profile)); setScreen('stats'); sceneRef.current?.togglePause(true); }}><MenuIcon id="character" /><kbd>C</kbd>{run.unspentPoints + run.pendingPassivePicks > 0 && <b className="alert-badge" aria-hidden="true">{run.unspentPoints + run.pendingPassivePicks}</b>}</button>
+        <button className={run.unspentPoints > 0 ? 'has-alert' : ''} aria-label={run.unspentPoints > 0 ? `Personnage : ${run.unspentPoints} point(s) à répartir` : 'Personnage'} data-tip="Statistiques, maîtrise et passif de départ (C)" disabled={screen === 'combat'} onClick={() => { setScreen('stats'); sceneRef.current?.togglePause(true); }}><MenuIcon id="character" /><kbd>C</kbd>{run.unspentPoints > 0 && <b className="alert-badge" aria-hidden="true">{run.unspentPoints}</b>}</button>
         <button aria-label="Succès" data-tip="Succès débloqués et à débloquer" disabled={screen === 'combat'} onClick={() => { setScreen('achievements'); sceneRef.current?.togglePause(true); }}><MenuIcon id="achievements" /></button>
         <button aria-label="Options" data-tip="Paramètres : volume, vitesse, plein écran" disabled={screen === 'combat'} onClick={() => setScreen('settings')}><MenuIcon id="settings" /></button>
         <button aria-label={`Vitesse du jeu ×${settings.combatSpeed}`} data-tip={`Vitesse du combat : ×${settings.combatSpeed} (cliquer pour passer à ×${settings.combatSpeed === 1 ? 2 : settings.combatSpeed === 2 ? 4 : 1})`} onClick={() => setSettings({ ...settings, combatSpeed: settings.combatSpeed === 1 ? 2 : settings.combatSpeed === 2 ? 4 : 1 })}><span aria-hidden="true">×{settings.combatSpeed}</span></button>
@@ -600,7 +570,7 @@ export function App() {
       speed={settings.combatSpeed} saveError={!!error}
       onTarget={(index) => { targetRef.current = index; syncCombat({ ...combat }); }}
       onRetry={() => { setError(''); void resolveCombat(combat); }} />}
-    {screen === 'combat' && combat && recap && <CombatRecap recap={recap} points={run.unspentPoints} pendingPassives={run.pendingPassivePicks}
+    {screen === 'combat' && combat && recap && <CombatRecap recap={recap} points={run.unspentPoints}
       stats={(['strength', 'speed', 'luck', 'defense', 'maxHp'] as const).map((key) => ({ key, label: statLabel(key) }))}
       onSpend={(key, amount) => pickStat(key as keyof typeof HEROES.warrior.stats, amount)} onContinue={continueAfterCombat} />}
 
@@ -608,13 +578,7 @@ export function App() {
     {screen === 'inventory' && <InventoryPage run={run} onChange={persistRun} onClose={backToWorld} />}
 
     {screen === 'stats' && <section className="panel modal-panel">
-      <PanelHeading label={passiveOffers.length ? 'CHOIX DE PASSIF' : 'PERSONNAGE'} title={passiveOffers.length ? `${run.pendingPassivePicks} choix en attente` : 'Statistiques & maîtrise'} onClose={() => { if (!passiveOffers.length) backToWorld(); }} />
-      {passiveOffers.length ? <div className="passive-offers">{passiveOffers.map((id) => {
-        const passive = PASSIVES.find((entry) => entry.id === id)!;
-        const rank = run.passives.find((entry) => entry.id === id)?.rank ?? 0;
-        const rarity = passiveRarity(passive.weight);
-        return <button className={`passive-card rarity-${rarity}`} key={id} onClick={() => clickPassive(id)}><ItemIcon id={passive.id} rarity={rarity} size={56} /><small style={{ color: RARITIES[rarity].color }}>{RARITIES[rarity].label.toUpperCase()} · RANG {rank + 1}/{passive.maxRank}</small><strong>{passive.name}</strong><span>{passive.description}</span></button>;
-      })}</div> : run.pendingPassivePicks > 0 ? <div className="empty-choice"><p>Aucun passif débloqué disponible pour ce palier.</p><button onClick={() => { const updated = { ...run, pendingPassivePicks: run.pendingPassivePicks - 1 }; persistRun(updated); if (updated.pendingPassivePicks === 0) backToWorld(); }}>Passer ce choix</button></div> :
+      <PanelHeading label="PERSONNAGE" title="Statistiques & maîtrise" onClose={backToWorld} />
         <><HeroIdentity hero={run.hero} level={run.level} subtitle="VOTRE BUILD" /><div className="stat-grid">{(Object.entries(stats ?? {}) as [string, number][]).map(([key, value]) => <div key={key}><StatIcon stat={key} /><span>{statLabel(key)}</span><strong>{Number.isInteger(value) ? value : value.toFixed(2)}</strong></div>)}</div>
         {run.unspentPoints > 0 && <div className="points-panel"><strong>{run.unspentPoints} points à répartir</strong>{(['strength', 'speed', 'luck', 'defense', 'maxHp'] as const).map((stat) => <div className="point-row" key={stat}><span>{statLabel(stat)}</span>{Array.from(new Set([1, 5, run.unspentPoints])).map((amount) => <button key={amount} onClick={() => pickStat(stat, amount)}>{amount === run.unspentPoints ? 'Tout' : `+${amount}`}</button>)}</div>)}
           {Object.values(run.invested).some((value) => (value ?? 0) > 0) && <button className="respec-button" onClick={() => persistRun(respecStats(run))}>Réinitialiser les points (gratuit)</button>}
@@ -626,7 +590,7 @@ export function App() {
           const rarity = passiveRarity(definition?.weight ?? 5);
           return <span key={passive.id} className={`rarity-${rarity}`} style={{ color: RARITIES[rarity].color, borderLeft: `3px solid ${RARITIES[rarity].color}` }}><ItemIcon id={passive.id} rarity={rarity} size={26} />{definition?.name} · rang {passive.rank}</span>;
         })}</div>
-        </>}
+        </>
     </section>}
 
     {screen === 'settings' && <SettingsPage settings={settings} setSettings={setSettings} onBack={backToWorld} inGame />}
@@ -676,13 +640,11 @@ function MasteryPanel({ hero, levels }: { hero: HeroId; levels: number }) {
   const floor = rank === 0 ? 0 : masteryLevelsForRank(rank);
   const next = rank >= MASTERY_MAX_RANK ? floor : masteryLevelsForRank(rank + 1);
   const ratio = next === floor ? 1 : (levels - floor) / (next - floor);
-  const rewards = PASSIVES.filter((passive) => passive.hero === hero && passive.masteryRequired !== undefined)
-    .sort((a, b) => (a.masteryRequired ?? 0) - (b.masteryRequired ?? 0));
+  const rewards = [...STARTING_OPTIONS[hero].weapons.map((option) => ({ ...option, kind: 'Équipement', name: ITEMS.find((item) => item.id === option.id)?.name })), ...STARTING_OPTIONS[hero].passives.map((option) => ({ ...option, kind: 'Passif', name: PASSIVES.find((passive) => passive.id === option.id)?.name }))].filter((option) => option.masteryRequired > 0).sort((a,b) => a.masteryRequired - b.masteryRequired);
   return <div className="mastery-panel">
     <div className="mastery-head"><strong>Maîtrise {HEROES[hero].name} · niveau {rank}</strong><span>{levels} niveaux gagnés{rank < MASTERY_MAX_RANK ? ` · prochain palier : ${next}` : ' · maximum'}</span></div>
     <div className="mastery-track"><i style={{ width: `${Math.round(ratio * 100)}%` }} /></div>
-    <ul className="mastery-rewards">{rewards.map((passive) => <li key={passive.id} className={rank >= (passive.masteryRequired ?? 0) ? 'reached' : ''}>
-      <b>Maîtrise {passive.masteryRequired}</b> · passif « {passive.name} »</li>)}</ul>
+    <ul className="mastery-rewards">{rewards.map((reward) => <li key={reward.id} className={rank >= reward.masteryRequired ? 'reached' : ''}><b>Maîtrise {reward.masteryRequired}</b> · {reward.kind} de départ « {reward.name} »</li>)}</ul>
   </div>;
 }
 

@@ -20,22 +20,22 @@ export function initialProfile(): Profile {
 
 export interface Loadout { weapon?: string; passive?: string }
 
-export function isStartOptionUnlocked(option: StartOption, profile: Profile): boolean {
-  return !option.unlockAchievement || profile.achievements.includes(option.unlockAchievement);
+export function isStartOptionUnlocked(option: StartOption, profile: Profile, hero: HeroId): boolean {
+  return masteryRank(profile.mastery[hero]) >= option.masteryRequired;
 }
 
 /** Retourne le choix demandé s'il est proposé et débloqué, sinon le choix de base de la classe. */
 export function resolveLoadout(hero: HeroId, profile: Profile, loadout: Loadout = {}): Required<Loadout> {
   const pick = (options: StartOption[], wanted?: string) => {
     const found = options.find((option) => option.id === wanted);
-    return found && isStartOptionUnlocked(found, profile) ? found.id : options[0].id;
+    return found && isStartOptionUnlocked(found, profile, hero) ? found.id : options[0].id;
   };
   return { weapon: pick(STARTING_OPTIONS[hero].weapons, loadout.weapon), passive: pick(STARTING_OPTIONS[hero].passives, loadout.passive) };
 }
 
 export function newRun(hero: HeroId, seed = 0x71a9c3, loadout?: Required<Loadout>): RunState {
   const start = HEROES[hero];
-  return {
+  const run: RunState = {
     version: 2, developerMode: false, hero, level: 1, xp: 0, xpToNext: 60, unspentPoints: 0, invested: {},
     hp: start.stats.maxHp, position: { ...WORLD_START }, encounterMeter: 0, distanceSinceEncounterCheck: 0, rngState: seed >>> 0 || 1,
     inventory: [
@@ -43,9 +43,10 @@ export function newRun(hero: HeroId, seed = 0x71a9c3, loadout?: Required<Loadout
       { instanceId: 'starter-potion', itemId: 'small-potion' },
     ],
     equipment: { weapon: 'starter-weapon' },
-    passives: loadout ? [{ id: loadout.passive, rank: 1 }] : [], pendingPassivePicks: 0, pendingCombat: null, defeatedBosses: [], secrets: [], usedShrines: [],
+    passives: [{ id: loadout?.passive ?? STARTING_OPTIONS[hero].passives[0].id, rank: 1 }], pendingPassivePicks: 0, pendingCombat: null, defeatedBosses: [], secrets: [], usedShrines: [],
     kills: 0, victories: 0, result: 'active',
   };
+  return { ...run, hp: deriveStats(run).maxHp };
 }
 
 export function equippedItems(run: RunState): ItemDefinition[] {
@@ -95,13 +96,12 @@ export function damageAfterDefense(raw: number, defense: number): number {
 }
 
 export function gainExperience(run: RunState, amount: number): RunState {
-  const updated = { ...run, xp: run.xp + Math.max(0, amount), pendingPassivePicks: run.pendingPassivePicks };
+  const updated = { ...run, xp: run.xp + Math.max(0, amount), pendingPassivePicks: 0 };
   while (updated.xp >= updated.xpToNext) {
     updated.xp -= updated.xpToNext;
     updated.level++;
     updated.unspentPoints += BALANCE.statPointsPerLevel;
     updated.xpToNext = Math.round(60 + (updated.level - 1) * 24);
-    if (updated.level % 5 === 0) updated.pendingPassivePicks++;
   }
   return updated;
 }
@@ -120,43 +120,6 @@ export function respecStats(run: RunState): RunState {
   if (!BALANCE.respecAllowed) return run;
   const refunded = Object.values(run.invested).reduce((sum, value) => sum + (value ?? 0), 0);
   return { ...run, invested: {}, unspentPoints: run.unspentPoints + refunded };
-}
-
-export function passiveChoices(run: RunState, profile: Profile): string[] {
-  const candidates = PASSIVES.filter((passive) => {
-    if (passive.hero !== run.hero && passive.hero !== 'both') return false;
-    if (passive.unlockAchievement && !profile.achievements.includes(passive.unlockAchievement)) return false;
-    if (passive.masteryRequired && masteryRank(profile.mastery[run.hero]) < passive.masteryRequired) return false;
-    if (profile.unlockedPassives.includes(passive.id) || !passive.unlockAchievement) {
-      return (run.passives.find((rank) => rank.id === passive.id)?.rank ?? 0) < passive.maxRank;
-    }
-    return false;
-  });
-  const choices: string[] = [];
-  let rng = run.rngState;
-  while (choices.length < Math.min(3, candidates.length)) {
-    const total = candidates.reduce((sum, passive) => sum + passive.weight, 0);
-    let roll = nextRandom(rng);
-    rng = roll.state;
-    let selected = candidates.find((passive) => {
-      roll = { ...roll, value: roll.value - passive.weight / total };
-      return roll.value < 0;
-    });
-    if (!selected) selected = candidates[candidates.length - 1];
-    choices.push(selected.id);
-    candidates.splice(candidates.indexOf(selected), 1);
-  }
-  return choices;
-}
-
-export function choosePassive(run: RunState, id: string): RunState {
-  const passive = PASSIVES.find((candidate) => candidate.id === id);
-  if (!passive || (passive.hero !== run.hero && passive.hero !== 'both') || run.pendingPassivePicks <= 0) return run;
-  const currentRank = run.passives.find((rank) => rank.id === id)?.rank ?? 0;
-  if (currentRank >= passive.maxRank) return run;
-  const passives = run.passives.filter((rank) => rank.id !== id);
-  passives.push({ id, rank: currentRank + 1 });
-  return { ...run, passives, pendingPassivePicks: run.pendingPassivePicks - 1 };
 }
 
 export function advanceEncounter(run: RunState, distance: number, profile: Profile): { run: RunState; triggered: boolean } {
@@ -444,7 +407,7 @@ export function validateRun(value: unknown): RunState {
       !Number.isFinite(run.xp) || !Number.isFinite(run.xpToNext) || run.xp < 0 || run.xpToNext <= 0) {
     throw new Error('La sauvegarde contient des statistiques de progression invalides.');
   }
-  return run as RunState;
+  return { ...run, pendingPassivePicks: 0 } as RunState;
 }
 
 export function decodeRun(raw: string): RunState {

@@ -31,11 +31,14 @@ function RewardSource({ id }: { id: string }) {
   const enemies = ENEMIES.filter((enemy) => enemy.loot.some((entry) => entry.itemId === id));
   const starts = (Object.keys(STARTING_OPTIONS) as (keyof typeof STARTING_OPTIONS)[])
     .filter((hero) => [...STARTING_OPTIONS[hero].weapons, ...STARTING_OPTIONS[hero].passives].some((option) => option.id === id))
-    .map((hero) => HEROES[hero].name);
+    .map((hero) => {
+      const option = [...STARTING_OPTIONS[hero].weapons, ...STARTING_OPTIONS[hero].passives].find((option) => option.id === id)!;
+      return `${HEROES[hero].name} · maîtrise ${option.masteryRequired}`;
+    });
   return <div className="achievement-reward-source">
     {item && <p><strong>{enemies.length === ENEMIES.length ? 'Butin global' : 'Butin ciblé'}</strong><span>{enemies.length === ENEMIES.length ? 'Tous les monstres et boss' : enemies.length ? enemies.map((enemy) => enemy.name).join(' · ') : 'Aucune table de butin'}</span></p>}
-    {passive && <p><strong>{passive.hero === 'both' ? 'Passif global' : `Passif ${HEROES[passive.hero].name}`}</strong><span>Choix tous les 5 niveaux{passive.masteryRequired ? ` · maîtrise ${passive.masteryRequired} requise` : ''}</span></p>}
-    {starts.length > 0 && <p><strong>Choix de départ</strong><span>{starts.join(' · ')}</span></p>}
+    {passive && <p><strong>{passive.hero === 'both' ? 'Passif global' : `Passif ${HEROES[passive.hero].name}`}</strong><span>Choix au départ{passive.masteryRequired ? ` · maîtrise ${passive.masteryRequired} requise` : ''}</span></p>}
+    {starts.length > 0 && <p><strong>Départ via maîtrise</strong><span>{starts.join(' · ')}</span></p>}
   </div>;
 }
 

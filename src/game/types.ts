@@ -110,6 +110,7 @@ export interface RunState {
   inventory: ItemInstance[];
   equipment: Partial<Record<EquipmentSlot, string>>;
   passives: PassiveRank[];
+  /** Champ de compatibilité des anciennes sauvegardes, toujours remis à zéro. */
   pendingPassivePicks: number;
   pendingCombat: string[] | null;
   defeatedBosses: string[];
