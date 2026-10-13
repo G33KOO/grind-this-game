@@ -12,15 +12,15 @@ describe('content and core rules', () => {
     expect(validateContent()).toEqual([]);
   });
 
-  it('uses a stable inverse-speed action timeline, including fractional ratios', () => {
+  it('uses speed only for initiative, with one action per fighter per round', () => {
     const run = newRun('assassin', 42);
     const combat = startCombat(run, ['slime']);
-    expect(combat.playerNextAction).toBeCloseTo(1 / 1.47);
-    expect(combat.enemies[0].nextAction).toBeCloseTo(1 / 0.7);
+    expect(combat.playerNextAction).toBe(1);
+    expect(combat.enemies[0].nextAction).toBe(2);
     const next = stepCombat(combat);
-    expect(next.time).toBeCloseTo(1 / 1.47);
-    expect(next.playerNextAction).toBeCloseTo(2 / 1.47);
-    expect(next.enemies[0].nextAction).toBeCloseTo(1 / 0.7);
+    expect(next.time).toBe(1);
+    expect(next.playerNextAction).toBe(3);
+    expect(next.enemies[0].nextAction).toBe(2);
   });
 
   it('resolves multiple enemies independently and keeps stable tie ordering', () => {
@@ -32,7 +32,7 @@ describe('content and core rules', () => {
     const enemyTurn = stepCombat({ ...combat, playerNextAction: 99 });
     expect(enemyTurn.log.at(-1)).toContain('Rat des ruines');
     expect(enemyTurn.enemies[0].nextAction).toBeGreaterThan(enemyTime);
-    expect(enemyTurn.enemies[1].nextAction).toBe(enemyTime);
+    expect(enemyTurn.enemies[1].nextAction).toBe(combat.enemies[1].nextAction);
   });
 
   it('clamps defense reduction and never returns non-positive damage', () => {
@@ -54,6 +54,21 @@ describe('content and core rules', () => {
     expect(deriveStats(reset).strength).toBe(11);
   });
 
+  it('refunds fully spent statistics at any time, preserves gear, and clamps health', () => {
+    const base = newRun('warrior');
+    const invested = { ...base, unspentPoints: 0, invested: { strength: 4, maxHp: 15 } };
+    const run = { ...invested, hp: deriveStats(invested).maxHp };
+    const reset = respecStats(run);
+    expect(reset.unspentPoints).toBe(19);
+    expect(reset.invested).toEqual({});
+    expect(reset.hp).toBe(deriveStats(base).maxHp);
+    expect(reset.inventory).toEqual(run.inventory);
+    expect(reset.equipment).toEqual(run.equipment);
+    expect(reset.passives).toEqual(run.passives);
+    expect(respecStats(reset).unspentPoints).toBe(19);
+    expect(allocatePoints(reset, 'defense', 19).unspentPoints).toBe(0);
+  });
+
   it('applies critical, shield, poison, lifesteal, cleave and additional strike without chaining', () => {
     const combat: CombatState = {
       ...startCombat(newRun('warrior', 13), ['slime', 'rat']),
@@ -61,7 +76,7 @@ describe('content and core rules', () => {
       playerHp: 60,
       playerMaxHp: 125,
       shield: 30,
-      playerStats: { ...startCombat(newRun('warrior', 13), ['slime']).playerStats, strength: 9, critChance: 1, critDamage: 2 },
+      playerStats: { ...startCombat(newRun('warrior', 13), ['slime']).playerStats, strength: 9, critChance: 100, critDamage: 200 },
       playerEffects: [
         { kind: 'lifesteal', ratio: 0.1 }, { kind: 'poison', damage: 4, turns: 2 },
         { kind: 'cleave', ratio: 0.5 }, { kind: 'extraStrike', ratio: 0.5 },

@@ -1,17 +1,17 @@
 import { useState } from 'react';
 import { ITEMS, STARTING_OPTIONS, HEROES, PASSIVES, MASTERY_MAX_RANK, masteryRank, masteryLevelsForRank } from '../game/content';
 import type { HeroId, Profile, Stats } from '../game/types';
-import { HeroPortrait, StatIcon } from './GameVisuals';
+import { HeroPortrait, StatIcon, formatStatValue } from './GameVisuals';
 import { HERO_ACCENT, ItemIcon, RARITIES, passiveRarity } from './icons';
 import { SpaceBackdrop } from './SpaceBackdrop';
 import './class-details.css';
 
 const STAT_INFO: Record<keyof Stats, { name: string; description: string }> = {
   strength: { name: 'Force', description: 'Augmente les dégâts de vos attaques.' },
-  speed: { name: 'Vitesse', description: 'Deux fois plus de vitesse : deux fois plus d’attaques sur la durée.' },
+  speed: { name: 'Vitesse', description: 'Augmente votre vitesse de déplacement de 5 unités par seconde pour chaque point. En combat, les plus rapides jouent d’abord. Chaque combattant agit une fois par tour. En cas d’égalité, vous jouez d’abord.' },
   luck: { name: 'Chance', description: 'Augmente les drops et favorise les objets rares et épiques.' },
   critChance: { name: 'Critique', description: 'Chance de critique sur une attaque principale. Maximum : 75 %.' },
-  critDamage: { name: 'Dégâts critiques', description: '×1,5 : un critique inflige 50 % de dégâts supplémentaires.' },
+  critDamage: { name: 'Dégâts critiques', description: '150 % : un critique inflige 50 % de dégâts supplémentaires. Les bonus ajoutent des points de pourcentage.' },
   maxHp: { name: 'Vie', description: 'PV maximum. La vie restante persiste entre les combats. À zéro, la partie se termine.' },
   defense: { name: 'Défense', description: 'Réduit les dégâts reçus, avec des gains décroissants. Réduction maximum : 72 %.' },
 };
@@ -42,7 +42,7 @@ export function ClassDetailsPage({ hero, profile, onHero, onBack }: { hero: Hero
     : passive ? `${availability(passive.id).text} · Passif de départ · ${RARITIES[passiveRarity(passive.weight)].label}`
     : concept.kind === 'stat' ? ''
     : rank === MASTERY_MAX_RANK ? 'Maîtrise maximale atteinte.' : `${next - levels} niveaux avant le rang ${rank + 1}.${upcoming.length ? ` Prochain déblocage (maîtrise ${upcoming[0].masteryRequired}) : ${upcoming.filter((entry) => entry.masteryRequired === upcoming[0].masteryRequired).map((entry) => entry.name).join(" · ")}.` : ""}`;
-  const format = (key: keyof Stats, value: number) => key === 'critChance' ? `${Math.round(value * 100)} %` : key === 'critDamage' ? `×${value}` : String(value);
+  const format = formatStatValue;
   return <main className="shell title-screen classes-page class-dossier" style={{ ['--accent' as string]: HERO_ACCENT[hero] }}>
     <SpaceBackdrop />
     <header className="dossier-header"><h1>Détail des classes</h1><nav aria-label="Classe">{(['warrior', 'assassin'] as const).map((entry) => <button key={entry} aria-pressed={hero === entry} onClick={() => { setConcept({ kind: 'mastery' }); onHero(entry); }}>{HEROES[entry].name}</button>)}</nav></header>

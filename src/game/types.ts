@@ -12,10 +12,12 @@ export type Effect =
   | { kind: 'defenseDamage'; ratio: number };
 
 export interface Stats {
+  /** Integer points. Speed determines initiative, never attack frequency. */
   strength: number;
   speed: number;
   luck: number;
   critChance: number;
+  /** Integer percentage: 150 means 150% of normal damage. */
   critDamage: number;
   maxHp: number;
   defense: number;
@@ -96,6 +98,7 @@ export interface ItemInstance {
 export interface RunState {
   version: 2;
   worldVersion?: number;
+  balanceVersion?: number;
   developerMode: boolean;
   hero: HeroId;
   level: number;

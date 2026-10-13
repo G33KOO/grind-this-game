@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import type { CombatState, HeroId } from '../game/types';
+import { HERO_ACCENT } from './icons';
 
 const INK = '#12161c';
 const line = { stroke: INK, strokeWidth: 3, strokeLinejoin: 'round' as const, strokeLinecap: 'round' as const };
@@ -27,10 +28,10 @@ const Eyes = ({ x, y, gap, size = 7, color = '#fff', pupil = INK }: { x: number;
 function NeonArt({ color, children }: { color: number; children: ReactNode }) {
   return <g className="neon-character-art" style={{ color: neonFor(color), filter: 'drop-shadow(0 0 2px currentColor) drop-shadow(0 0 5px currentColor)' }}>
     <style>{`
-      .neon-character-art.neon-character-art :is(path,rect,circle,ellipse,line,polygon,polyline) {
+      .neon-character-art.neon-character-art.neon-character-art :is(path,rect,circle,ellipse,line,polygon,polyline) {
         stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round;
       }
-      .neon-character-art.neon-character-art [fill]:not([fill="none"]) { fill: currentColor; fill-opacity: .07; }
+      .neon-character-art.neon-character-art.neon-character-art [fill]:not([fill="none"]) { fill: currentColor; fill-opacity: .07; }
     `}</style>
     {children}
   </g>;
@@ -260,8 +261,9 @@ function EnemyDrawing({ id, color }: { id: string; color: number }) {
   }
 }
 
-export function HeroArt(props: { hero: HeroId; color: number }) {
-  return <NeonArt color={props.color}><HeroDrawing {...props} /></NeonArt>;
+export function HeroArt({ hero }: { hero: HeroId; color?: number }) {
+  const color = parseInt(HERO_ACCENT[hero].slice(1), 16);
+  return <NeonArt color={color}><HeroDrawing hero={hero} color={color} /></NeonArt>;
 }
 
 function HeroDrawing({ hero, color }: { hero: HeroId; color: number }) {
@@ -349,7 +351,7 @@ function Fighter({ name, hp, maxHp, extra, className, onClick, targeted, childre
       style={{ ['--neon' as string]: neon }}
       role={onClick ? 'button' : undefined} aria-label={`${name} ${hp} sur ${maxHp} PV`}>
       {targeted && <div className="target-arrow" aria-hidden="true">▼</div>}
-      <div className="fighter-sprite" key={hits.length ? hits[hits.length - 1].id : 'idle'}>
+      <div className={`fighter-sprite${hits.length ? ' is-hit' : ''}`} key={hits.length ? hits[hits.length - 1].id : 'idle'}>
         <svg viewBox="0 0 200 200" aria-hidden="true">
           {children}
         </svg>
@@ -365,7 +367,6 @@ export interface BattleSceneProps {
   combat: CombatState;
   hero: HeroId;
   heroName: string;
-  heroColor: number;
   zoneId: string;
   target: number;
   speed: number;
@@ -374,7 +375,7 @@ export interface BattleSceneProps {
   onRetry(): void;
 }
 
-export function BattleScene({ combat, hero, heroName, heroColor, zoneId, target, speed, saveError, onTarget, onRetry }: BattleSceneProps) {
+export function BattleScene({ combat, hero, heroName, zoneId, target, speed, saveError, onTarget, onRetry }: BattleSceneProps) {
   const backdrop = ZONE_BACKDROPS[zoneId] ?? ZONE_BACKDROPS.meadow;
   const count = combat.enemies.length;
   return (
@@ -382,7 +383,7 @@ export function BattleScene({ combat, hero, heroName, heroColor, zoneId, target,
       <div className="battle-sky" />
       <svg className="battle-backdrop" viewBox="0 0 1200 260" preserveAspectRatio="xMidYMax slice" aria-hidden="true">{backdrop.scene}</svg>
       <div className="battle-ground" />
-      <div className="battle-speed" aria-hidden="true">×{speed} · ← → ou Tab : cible</div>
+      <div className="battle-speed" aria-hidden="true">Tour {Math.floor(Math.max(0, combat.time - 1) / (combat.enemies.length + 1)) + 1} · ×{speed} · ← → ou Tab : cible</div>
       <div className="battle-enemies">
         {combat.enemies.map((enemy, index) => (
           <Fighter key={enemy.unitId} name={enemy.name} hp={enemy.currentHp} maxHp={enemy.hp} neon={neonFor(enemy.color)}
@@ -393,9 +394,9 @@ export function BattleScene({ combat, hero, heroName, heroColor, zoneId, target,
           </Fighter>
         ))}
       </div>
-      <Fighter name={heroName} hp={combat.playerHp} maxHp={combat.playerMaxHp} className="hero-fighter" neon={neonFor(heroColor)}
+      <Fighter name={heroName} hp={combat.playerHp} maxHp={combat.playerMaxHp} className="hero-fighter" neon={HERO_ACCENT[hero]}
         extra={combat.shield > 0 ? ` 🛡${combat.shield}` : ''}>
-        <HeroArt hero={hero} color={heroColor} />
+        <HeroArt hero={hero} />
       </Fighter>
       <div className="battle-log" aria-live="polite">{combat.log.slice(-4).map((entry, index) => <p key={`${index}-${entry}`}>{entry}</p>)}</div>
       {saveError && combat.over !== 'none' && <button className="primary battle-retry" onClick={onRetry}>Réessayer l’enregistrement du combat</button>}

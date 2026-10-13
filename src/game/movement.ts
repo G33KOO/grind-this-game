@@ -2,6 +2,10 @@ export interface Position { x: number; y: number }
 export interface CircleObstacle extends Position { radius: number }
 export type ClearanceField = (x: number, y: number) => number;
 export const PLAYER_RADIUS = 9;
+/** 175 units/s at 8 Speed; every additional integer point adds 5 units/s. */
+export function movementSpeed(speed: number): number {
+  return 135 + Math.max(1, Math.round(Number.isFinite(speed) ? speed : 8)) * 5;
+}
 const SKIN = .05;
 
 export function obstacleField(terrain: ClearanceField, obstacles: CircleObstacle[]): ClearanceField {

@@ -1,0 +1,31 @@
+.combat-result-screen { --result-accent: #2ee6c8; position: fixed; inset: 0; z-index: 40; display: grid; place-items: center; padding: 24px; overflow: hidden; background: #030810; isolation: isolate; }
+.combat-result-screen.is-defeat { --result-accent: #f08c9d; }
+.combat-result-screen > .space-backdrop { position: absolute; inset: 0; z-index: -1; overflow: hidden; pointer-events: none; background: radial-gradient(ellipse at 70% 25%, #0c132e, #030810 70%); }
+.combat-result-screen .result-content { display: grid; grid-template-rows: auto minmax(0, 1fr) auto; gap: 26px; width: min(780px, 100%); height: min(660px, calc(100dvh - 48px)); max-height: none; padding: 0; border: 0; border-radius: 0; background: transparent; box-shadow: none; overflow: hidden; text-align: center; }
+.result-heading { display: grid; justify-items: center; gap: 10px; }
+.result-emblem { display: grid; place-items: center; color: var(--result-accent); width: 64px; height: 64px; border: 1px solid color-mix(in srgb, var(--result-accent) 25%, transparent); border-radius: 50%; filter: drop-shadow(0 0 12px color-mix(in srgb, var(--result-accent) 15%, transparent)); }
+.combat-result-screen .result-heading h2 { margin: 0; font-size: clamp(30px, 5vw, 44px); color: #e4f1f5; font-weight: 600; letter-spacing: .1em; text-transform: uppercase; }
+.result-heading p { margin: 0; color: #92acba; font-size: 16px; }
+.result-board { display: grid; grid-template-columns: 240px minmax(0, 1fr); align-items: center; gap: 38px; min-height: 0; border-block: 1px solid #41657540; padding-block: 22px; }
+.result-hero { display: flex; flex-direction: column; align-items: center; gap: 4px; min-width: 0; }.result-hero .hero-portrait { width: 220px; height: 220px; }
+.result-level { display: flex; align-items: baseline; gap: 10px; color: #94adba; font-size: 16px; }.result-level strong { color: #e0f1f4; font-size: 24px; }
+.result-rewards { display: grid; grid-template-rows: auto minmax(0, 1fr) auto; gap: 22px; min-height: 0; height: 100%; overflow: hidden; text-align: left; padding-right: 8px; align-content: center; }
+.run-result .result-rewards { grid-template-rows: auto auto minmax(0, 1fr); }
+.result-loot { display: flex; flex-direction: column; min-height: 0; }
+.result-loot .result-item-list { min-height: 0; flex: 1; align-content: start; }
+.result-item-list::-webkit-scrollbar { width: 4px; }
+.result-item-list::-webkit-scrollbar-track { background: transparent; border: 0; box-shadow: none; }
+.result-item-list::-webkit-scrollbar-thumb { background: #527381; border: 0; border-radius: 2px; box-shadow: none; }
+.result-section-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 12px; }.result-section-heading h3 { margin: 0; color: #a8c0cd; font-size: 15px; font-weight: 500; letter-spacing: .06em; }.result-section-heading > strong { color: #f1cb8a; font-size: 24px; }.result-section-heading > span { color: #7f9dab; font-size: 15px; }
+.result-xp-track { height: 5px; overflow: hidden; background: #304c5c66; }.result-xp-track i { display: block; height: 100%; background: #2ee6c8; box-shadow: 0 0 10px #2ee6c840; }
+.result-level-gain { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 12px; min-height: 22px; color: #92acba; font-size: 14px; }.result-level-gain strong { color: #f1cb8a; font-size: 16px; }
+.result-item-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 12px; max-height: 160px; overflow-y: auto; }.result-item { display: flex; align-items: center; gap: 10px; min-width: 0; }.result-item .item-icon { flex-shrink: 0; background: transparent; border: 0; box-shadow: none; }.result-item strong { color: #c8dee7; font-size: 14px; font-weight: 500; line-height: 1.35; }.result-empty { margin: 0; color: #7896a5; font-size: 14px; grid-column: 1 / -1; }
+.result-unlocks { display: grid; gap: 8px; }.result-unlocks p { display: flex; align-items: center; gap: 10px; margin: 0; color: #ead2a2; font-size: 14px; }.result-unlocks svg { flex-shrink: 0; }
+.result-actions { display: flex; justify-content: center; align-items: center; gap: 16px; }
+.combat-result-screen .result-actions button { min-width: 180px; min-height: 48px; padding: 12px 20px; border-radius: 1px; font-size: 16px; font-weight: 600; letter-spacing: .02em; }
+.combat-result-screen .result-primary { border: 1px solid #2ee6c880; color: #dffff7; background: #12332f88; }.combat-result-screen .result-primary:hover { border-color: #2ee6c8; background: #19473eaa; }
+.combat-result-screen .result-secondary { border: 1px solid #46697960; color: #b5ccd7; background: transparent; }.combat-result-screen .result-secondary:hover { border-color: #9ac4cb; background: transparent; color: #e1f2f6; }
+.result-run-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }.result-run-stats > div { display: grid; justify-items: center; gap: 7px; color: #809eae; }.result-run-stats strong { color: #dfedf3; font-size: 28px; }.result-run-stats span { font-size: 13px; }
+.result-permanent { display: flex; gap: 12px; align-items: center; color: #2ee6c8; }.result-permanent > div { display: grid; gap: 6px; }.result-permanent strong { color: #cce7e6; font-size: 15px; font-weight: 500; }.result-permanent span { color: #87a6b6; font-size: 14px; }
+@media (max-height: 650px) { .combat-result-screen .result-content { gap: 16px; }.result-heading { gap: 6px; }.result-emblem { width: 44px; height: 44px; }.result-emblem svg { width: 26px; height: 26px; }.result-board { padding-block: 14px; }.result-rewards { gap: 14px; }.result-hero .hero-portrait { width: 180px; height: 180px; } }
+@media (max-width: 650px) { .combat-result-screen { padding: 16px; }.combat-result-screen .result-content { height: calc(100dvh - 32px); gap: 18px; }.result-board { grid-template-columns: 110px minmax(0, 1fr); gap: 16px; }.result-hero .hero-portrait { width: 120px; height: 150px; }.result-level { flex-direction: column; gap: 4px; align-items: center; font-size: 14px; }.result-item-list { grid-template-columns: 1fr; }.result-run-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }.result-actions { gap: 10px; }.combat-result-screen .result-actions button { min-width: 0; flex: 1; padding: 12px 10px; font-size: 14px; }.result-level-gain { flex-wrap: wrap; } }

@@ -18,9 +18,11 @@ export function ZoneLoot({ run, profile, onClose }: { run: RunState; profile: Pr
   const enemy = ENEMIES.find((enemy) => enemy.id === monster)!;
   const boss = enemy.id === zone.boss;
   const odds = lootOdds(run, enemy.id, profile);
+  const lootRows = odds.entries.filter((entry, index, entries) => entries.findIndex((candidate) => candidate.itemId === entry.itemId) === index)
+    .map((entry) => ({ ...entry, probability: odds.entries.filter((candidate) => candidate.itemId === entry.itemId).reduce((sum, candidate) => sum + candidate.probability, 0) }));
   const remaining = Math.max(0, BALANCE.encounterCheckDistance - run.distanceSinceEncounterCheck);
   const nextMeter = Math.min(BALANCE.maxEncounterMeter, run.encounterMeter + remaining * BALANCE.encounterMeterChancePerUnit);
-  const presence = Array.from({ length: zone.maxGroup }, (_, index) => 1 - (1 - 1 / zone.enemies.length) ** (index + 1)).reduce((sum, value) => sum + value, 0) / zone.maxGroup;
+  const monsterChance = 1 / zone.enemies.length;
   return <section className="panel modal-panel zone-loot-panel" role="dialog" aria-modal="true" aria-label="Zones et butins">
     <div className="panel-heading"><div><p className="eyebrow">ATLAS / BESTIAIRE</p><h2>Terres du seuil</h2></div><button onClick={onClose}>Retour <kbd>Échap</kbd></button></div>
     <div className="atlas-layout">
@@ -29,17 +31,17 @@ export function ZoneLoot({ run, profile, onClose }: { run: RunState; profile: Pr
       </button>)}</nav>
       <div className="bestiary-content">
         <header className="biome-heading"><div><p className="eyebrow">NIVEAU DE ZONE {zone.level}</p><h3>{zone.name}</h3></div><div className="biome-level">{zone.level}</div></header>
-        <div className="farm-facts"><div><strong>{zone.maxGroup === 1 ? '1 monstre' : `1 à ${zone.maxGroup} monstres`}</strong><span>{percent(1 / zone.maxGroup)} par taille de groupe · doublons possibles</span></div><div><strong><StatIcon stat="luck" /> {deriveStats(run).luck} Chance</strong><span>Taux ajustés à votre build</span></div><div><strong>{percent(encounterChance(nextMeter))} rencontre</strong><span>Prochain contrôle dans ~{Math.ceil(remaining)} px · toutes les zones</span></div></div>
+        <div className="farm-facts"><div><strong>{zone.maxGroup === 1 ? '1 monstre' : `1 à ${zone.maxGroup} monstres`}</strong><span>Chaque monstre est tiré séparément · doublons possibles</span></div><div><strong><StatIcon stat="luck" /> {deriveStats(run).luck} Chance</strong><span>Taux ajustés à votre build</span></div><div><strong>{percent(encounterChance(nextMeter))} rencontre</strong><span>Prochain contrôle dans ~{Math.ceil(remaining)} px · toutes les zones</span></div></div>
         <nav className="monster-roster" aria-label="Monstres de la zone">{[...zone.enemies, zone.boss].map((id) => {
           const entry = ENEMIES.find((enemy) => enemy.id === id)!;
-          return <button key={id} aria-pressed={monster === id} onClick={() => setMonster(id)}><MonsterPortrait id={id} color={entry.color} /><strong>{entry.name}</strong><small>{id === zone.boss ? 'BOSS' : `${percent(presence)} / rencontre`}</small></button>;
+          return <button key={id} aria-pressed={monster === id} onClick={() => setMonster(id)}><MonsterPortrait id={id} color={entry.color} /><strong>{entry.name}</strong><small>{id === zone.boss ? 'BOSS' : `${percent(monsterChance)} par tirage`}</small></button>;
         })}</nav>
         <article className="bestiary-inspector">
           <aside className="bestiary-art"><MonsterPortrait id={enemy.id} color={enemy.color} /><p className="eyebrow">{boss ? 'GARDIEN DE ZONE' : 'ENNEMI'}</p><h3>{enemy.name}</h3><div className="monster-vitals"><span>♥ {enemy.hp} PV</span><span>✦ {enemy.xp} XP</span><span>⚔ {enemy.strength}</span><span>➤ {enemy.speed}</span></div></aside>
           <div className="bestiary-drops"><div className="bag-heading"><h3>Butins possibles</h3><span>{percent(odds.chance)} / monstre</span></div>
-            <p className="small-note">{boss ? (run.defeatedBosses.includes(enemy.id) ? 'Déjà vaincu dans cette partie.' : 'Combat au contact · position fixe.') : `Présence dans un groupe : ${percent(presence)}. Par emplacement : ${percent(1 / zone.enemies.length)}.`}</p>
-            <ul className="farm-drops">{odds.entries.map((entry) => <li key={entry.itemId} className={entry.unlocked ? '' : 'drop-locked'}>
-              <ItemIcon id={entry.itemId} rarity={entry.item.rarity} size={48} /><div><strong style={{ color: RARITIES[entry.item.rarity].color }}>{entry.item.name}</strong><span>{entry.item.description}</span>{!entry.unlocked && <small>🔒 {ACHIEVEMENTS.find((achievement) => achievement.id === entry.item.unlockAchievement)?.name}</small>}</div><b>{percent(entry.probability)}</b>
+            <p className="small-note">{boss ? (run.defeatedBosses.includes(enemy.id) ? 'Déjà vaincu dans cette partie.' : 'Combat au contact · position fixe.') : `Chaque monstre du groupe a ${percent(monsterChance)} de chances d’être ${enemy.name}.`}</p>
+            <ul className="farm-drops">{lootRows.map((entry) => <li key={entry.itemId} className={entry.owned && entry.item.slot !== 'consumable' ? 'drop-owned' : entry.eligible ? '' : 'drop-locked'}>
+              <ItemIcon id={entry.itemId} rarity={entry.item.rarity} size={48} /><div><strong style={{ color: RARITIES[entry.item.rarity].color }}>{entry.item.name}</strong><span>{entry.item.description}</span>{!entry.unlocked && !entry.owned ? <small>🔒 {ACHIEVEMENTS.find((achievement) => achievement.id === entry.item.unlockAchievement)?.name}</small> : entry.item.slot === 'consumable' && <small>Consommable · plusieurs exemplaires possibles</small>}</div>{entry.owned && entry.item.slot !== 'consumable' ? <b className="drop-owned-label">Déjà obtenu</b> : <b>{percent(entry.probability)}</b>}
             </li>)}</ul><p className="small-note">Aucun objet : {percent(1 - odds.chance)} · Un objet maximum par monstre après victoire. Les tirages d’objets sont exclusifs.</p>
           </div>
         </article>

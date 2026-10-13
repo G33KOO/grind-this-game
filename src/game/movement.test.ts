@@ -1,8 +1,20 @@
 import { describe, expect, it } from 'vitest';
-import { moveWithSliding, obstacleField, PLAYER_RADIUS } from './movement';
+import { moveWithSliding, movementSpeed, obstacleField, PLAYER_RADIUS } from './movement';
 import { BOSS_BLOCK_RADIUS, BOSS_POSITIONS, PATHS, WORLD_START, clearance } from './world';
 
 describe('wall sliding', () => {
+  it('increases movement by five units per Speed point and scales displacement', () => {
+    expect(movementSpeed(8)).toBe(175);
+    expect(movementSpeed(14)).toBe(205);
+    expect(movementSpeed(15) - movementSpeed(14)).toBe(5);
+    const field = () => 1000;
+    const normal = moveWithSliding({ x: 0, y: 0 }, { x: movementSpeed(8) * .1, y: 0 }, field);
+    const faster = moveWithSliding({ x: 0, y: 0 }, { x: movementSpeed(14) * .1, y: 0 }, field);
+    expect(normal.x).toBeCloseTo(17.5);
+    expect(faster.x).toBeCloseTo(20.5);
+    expect(movementSpeed(-10)).toBe(140);
+    expect(movementSpeed(NaN)).toBe(175);
+  });
   it('preserves tangential movement against a straight wall', () => {
     const position=moveWithSliding({x:10,y:0},{x:-8,y:12},x=>x);
     expect(position.x).toBeGreaterThanOrEqual(PLAYER_RADIUS);

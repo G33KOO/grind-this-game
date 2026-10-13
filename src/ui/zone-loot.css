@@ -13,3 +13,6 @@
 .farm-drops li > div { flex: 1; min-width: 0; }
 .farm-drops li > b { white-space: nowrap; color: #e3fff8; }
 .farm-drops .drop-locked { opacity: .65; }
+.farm-drops li > .drop-owned-label { color: #2ee6c8; font-size: 14px; font-weight: 600; }
+.farm-drops .item-icon { display: inline-grid; place-items: center; margin: 0; padding: 0; line-height: 0; }
+.farm-drops .item-icon > svg { display: block; margin: 0; }

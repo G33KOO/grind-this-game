@@ -4,7 +4,7 @@ import type { CombatState } from './types';
 
 function wounded(): CombatState {
   const combat = startCombat(newRun('warrior', 42, { weapon: 'iron-sword', passive: 'battle-heart' }), ['golem']);
-  return { ...combat, playerHp: 50, playerNextAction: 0, enemies: combat.enemies.map(enemy => ({ ...enemy, nextAction: 99 })), playerStats: { ...combat.playerStats, strength: 5, critChance: 0, speed: 10 } };
+  return { ...combat, playerHp: 50, playerNextAction: 0, enemies: combat.enemies.map(enemy => ({ ...enemy, defense: 0, nextAction: 99 })), playerStats: { ...combat.playerStats, strength: 5, critChance: 0, speed: 10 } };
 }
 
 describe('lifesteal', () => {
@@ -55,7 +55,7 @@ describe('lifesteal', () => {
 
   it('heals from actual damage including critical hits and the killing blow, excluding overkill', () => {
     const combat = wounded();
-    const critical = stepCombat({ ...combat, playerStats: { ...combat.playerStats, critChance: 1, critDamage: 2 }, playerEffects: [{ kind: 'lifesteal', ratio: .2 }] });
+    const critical = stepCombat({ ...combat, playerStats: { ...combat.playerStats, critChance: 100, critDamage: 200 }, playerEffects: [{ kind: 'lifesteal', ratio: .2 }] });
     expect(critical.playerHp).toBe(52); // 10 dégâts réels
     const kill = stepCombat({ ...combat, enemies: [{ ...combat.enemies[0], currentHp: 2 }], playerEffects: [{ kind: 'lifesteal', ratio: 1 }] });
     expect(kill.playerHp).toBe(52);

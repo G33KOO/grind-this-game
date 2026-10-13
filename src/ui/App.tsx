@@ -1,10 +1,10 @@
-﻿import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Phaser from 'phaser';
-import { ACHIEVEMENTS, BALANCE, ENEMIES, HEROES, ITEMS, PASSIVES, ZONES, masteryLevelsForRank, masteryRank, MASTERY_MAX_RANK, STARTING_OPTIONS } from '../game/content';
+import { ACHIEVEMENTS, BALANCE, ENEMIES, HEROES, ITEMS, PASSIVES, ZONES, masteryLevelsForRank, masteryRank, MASTERY_MAX_RANK } from '../game/content';
 import {
-  addAchievements, advanceEncounter, allocatePoints, applyProgress, deriveStats,
+  addAchievements, advanceEncounter, applyProgress, deriveStats,
   gainExperience, initialProfile, newRun, rememberLoadout, resolveLoadout, rollEncounter,
-  respecStats, rollLoot, startCombat, stepCombat,
+  rollLoot, startCombat, stepCombat,
 } from '../game/engine';
 import type { Loadout } from '../game/engine';
 import { DEFAULT_SETTINGS, loadProfile, loadRun, loadSettings, saveProfile, saveRun, saveSettings, type Settings } from '../game/save';
@@ -14,7 +14,8 @@ import { HERO_NEON, PlatformScene, type MapCallbacks, type MapEvent } from '../g
 import { ZONE_ENTRIES, zoneAt } from '../game/world';
 import { BattleScene } from './BattleScene';
 import { CombatRecap, type CombatRecapData } from './CombatRecap';
-import { HERO_ACCENT, ItemIcon, RARITIES, passiveRarity } from './icons';
+import { RunSummary } from './RunSummary';
+import { HERO_ACCENT, ItemIcon, passiveRarity } from './icons';
 import { LoadoutPage } from './LoadoutPage';
 import { ZoneLoot } from './ZoneLoot';
 import { InventoryPage } from './InventoryPage';
@@ -22,14 +23,15 @@ import { ClassDetailsPage } from './ClassDetailsPage';
 import { AchievementsPage } from './AchievementsPage';
 import { BestiaryPage } from './BestiaryPage';
 import { SpaceBackdrop } from './SpaceBackdrop';
-import { HeroPortrait, HeroIdentity, MenuIcon, MenuFooter, StatIcon } from './GameVisuals';
+import { LoadingScreen } from './LoadingScreen';
+import { HeroPortrait, MenuIcon, MenuFooter } from './GameVisuals';
 
 
 import './game-hud.css';
 
 import type { CombatState, HeroId, Profile, RunState } from '../game/types';
 
-type Screen = 'title' | 'world' | 'combat' | 'inventory' | 'stats' | 'settings' | 'achievements' | 'summary' | 'loot';
+type Screen = 'title' | 'world' | 'combat' | 'inventory' | 'settings' | 'achievements' | 'summary' | 'loot';
 const percentage = (value: number, max: number) => `${Math.max(0, Math.min(100, Math.round(value / Math.max(1, max) * 100)))}%`;
 
 export function App() {
@@ -40,6 +42,7 @@ export function App() {
   const profileRef = useRef(profile);
   const profileHealthy = useRef(true);
   const [screen, setScreen] = useState<Screen>('title');
+  const [inventoryTab, setInventoryTab] = useState<'equipment' | 'stats'>('equipment');
   const [newRunSelection, setNewRunSelection] = useState(false);
   const [confirmAbandon, setConfirmAbandon] = useState(false);
   const [titlePanel, setTitlePanel] = useState<'settings' | 'achievements' | 'bestiary' | null>(null);
@@ -68,6 +71,7 @@ export function App() {
 
   const syncRun = useCallback((updated: RunState | null) => {
     runRef.current = updated;
+    if (updated) sceneRef.current?.setMovementSpeed(deriveStats(updated).speed);
     setRun(updated);
   }, []);
   const syncCombat = useCallback((updated: CombatState | null) => {
@@ -199,6 +203,7 @@ export function App() {
         const { up, down, left, right } = settingsRef.current.bindings;
         scene.setMoveKeys({ up, down, left, right });
         scene.setReduceMotion(settingsRef.current.reduceMotion);
+        if (runRef.current) scene.setMovementSpeed(deriveStats(runRef.current).speed);
         window.requestAnimationFrame(() => setWorldReady(true));
       },
       travel: (pending) => {
@@ -207,12 +212,14 @@ export function App() {
         const danger = Math.min(1, (meter + pending * BALANCE.encounterMeterChancePerUnit) / BALANCE.maxEncounterMeter);
         const percent = Math.round(danger * 100);
         if (bar) {
-          bar.style.width = `${danger * 100}%`;
+          const width = `${danger * 100}%`;
+          if (bar.style.width !== width) bar.style.width = width;
           const gauge = bar.closest('.encounter-bar');
-          gauge?.setAttribute('aria-valuenow', String(percent));
-          gauge?.setAttribute('data-danger', danger >= .75 ? 'high' : 'normal');
+          if (gauge?.getAttribute('aria-valuenow') !== String(percent)) gauge?.setAttribute('aria-valuenow', String(percent));
+          const state = danger >= .75 ? 'high' : 'normal';
+          if (gauge?.getAttribute('data-danger') !== state) gauge?.setAttribute('data-danger', state);
         }
-        if (dangerPercentRef.current) dangerPercentRef.current.textContent = `${percent} %`;
+        if (dangerPercentRef.current && dangerPercentRef.current.textContent !== `${percent} %`) dangerPercentRef.current.textContent = `${percent} %`;
       },
       control: setDevice,
       isBossDefeated: (bossId) => !!runRef.current?.defeatedBosses.includes(bossId) ||
@@ -224,7 +231,7 @@ export function App() {
     // Laisse l'écran de chargement s'afficher avant la construction (synchrone) du monde
     const timer = window.setTimeout(() => {
       game = new Phaser.Game({
-        type: Phaser.CANVAS,
+        type: Phaser.AUTO,
         render: { antialias: true, pixelArt: false, roundPixels: false },
         parent: 'game-canvas',
         width: 960,
@@ -366,10 +373,10 @@ export function App() {
         }
         if (screen !== 'summary' && screen !== 'combat') setScreen('world');
       }
-      if (event.code === settings.bindings.inventory && screen === 'world') setScreen('inventory');
-      if (event.code === settings.bindings.character && screen === 'world') setScreen('stats');
+      if (event.code === settings.bindings.inventory && screen === 'world') { setInventoryTab('equipment'); setScreen('inventory'); }
+      if (event.code === settings.bindings.character && screen === 'world') { setInventoryTab('stats'); setScreen('inventory'); }
       if (event.code === 'KeyL' && screen === 'world') setScreen('loot');
-      if (screen === 'combat' && combatRef.current && (event.key === 'Tab' || event.key === 'ArrowRight' || event.key === 'ArrowLeft')) {
+      if (screen === 'combat' && !recap && combatRef.current && (event.key === 'Tab' || event.key === 'ArrowRight' || event.key === 'ArrowLeft')) {
         event.preventDefault();
         const alive = combatRef.current.enemies.map((enemy, index) => enemy.currentHp > 0 ? index : -1).filter((index) => index >= 0);
         if (alive.length) {
@@ -381,17 +388,17 @@ export function App() {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [screen, confirmAbandon, loadoutHero, heroDetail, titlePanel, settings.bindings.inventory, settings.bindings.character]);
+  }, [screen, !!recap, confirmAbandon, loadoutHero, heroDetail, titlePanel, settings.bindings.inventory, settings.bindings.character]);
 
   useEffect(() => {
     const frame = requestAnimationFrame(() => {
       if (screen === 'world' || (screen === 'combat' && !recap)) return;
-      const surface = document.querySelector('.confirm-dialog') ?? document.querySelector('.recap-card') ?? document.querySelector('.modal-panel') ?? document.querySelector('main');
+      const surface = document.querySelector('.confirm-dialog') ?? document.querySelector('.result-content') ?? document.querySelector('.modal-panel') ?? document.querySelector('main');
       surface?.querySelector<HTMLElement>('button:not(:disabled), input:not(:disabled), select:not(:disabled)')?.focus({ preventScroll: true });
     });
     const trap = (event: KeyboardEvent) => {
       if (event.key !== 'Tab' || (screen === 'combat' && !recap)) return;
-      const surface = document.querySelector('.confirm-dialog') ?? document.querySelector('.recap-card') ?? document.querySelector('.modal-panel');
+      const surface = document.querySelector('.confirm-dialog') ?? document.querySelector('.result-content') ?? document.querySelector('.modal-panel');
       if (!surface) return;
       const controls = Array.from(surface.querySelectorAll<HTMLElement>('button:not(:disabled), input:not(:disabled), select:not(:disabled)')).filter((element) => element.getClientRects().length > 0);
       if (!controls.length) return;
@@ -413,7 +420,7 @@ export function App() {
       const up = !!(pad.buttons[12]?.pressed);
       const down = !!(pad.buttons[13]?.pressed);
       if ((up && !padButtonsRef.current.up) || (down && !padButtonsRef.current.down)) {
-        const surface = document.querySelector('.confirm-dialog') ?? document.querySelector('.recap-card') ?? document.querySelector('.modal-panel') ?? document;
+        const surface = document.querySelector('.confirm-dialog') ?? document.querySelector('.result-content') ?? document.querySelector('.modal-panel') ?? document;
         const buttons = Array.from(surface.querySelectorAll<HTMLButtonElement>('button:not(:disabled)')).filter((button) => button.getClientRects().length > 0);
         const current = buttons.indexOf(document.activeElement as HTMLButtonElement);
         const shift = down ? 1 : -1;
@@ -448,11 +455,7 @@ export function App() {
     void saveRun(updated).catch((saveError: unknown) => setError(saveError instanceof Error ? saveError.message : 'Échec de sauvegarde.'));
   };
 
-  const pickStat = (key: keyof typeof HEROES.warrior.stats, amount: number) => {
-    if (run) persistRun(allocatePoints(run, key, amount));
-  };
-
-  const openInventory = () => { setScreen('inventory'); sceneRef.current?.togglePause(true); };
+  const openInventory = (tab: 'equipment' | 'stats' = 'equipment') => { setInventoryTab(tab); setScreen('inventory'); sceneRef.current?.togglePause(true); };
   const backToWorld = () => {
     setScreen('world');
     sceneRef.current?.togglePause(false);
@@ -526,14 +529,14 @@ export function App() {
   }
 
   return <main className="shell game-shell">
-    <header className="game-hud" style={{ ['--accent' as string]: HERO_ACCENT[run.hero] }}>
+    <header className="game-hud" inert={!!recap || screen === 'summary' || !worldReady} style={{ ['--accent' as string]: HERO_ACCENT[run.hero] }}>
       <section className="hud-status" aria-label="État du personnage">
         <div className="hud-class-emblem"><HeroPortrait hero={run.hero} /><span>{run.level}</span></div>
         <div className="hud-life-panel"><div className="hud-life-heading"><strong>{HEROES[run.hero].name}</strong><span>{hudHp}<small> / {hudMaxHp}</small></span></div>
           <div className={hudHp / Math.max(1, hudMaxHp) < .3 ? 'hud-life-track is-low' : 'hud-life-track'} role="progressbar" aria-label="Points de vie" aria-valuemin={0} aria-valuemax={hudMaxHp} aria-valuenow={hudHp}><i style={{ width: percentage(hudHp, hudMaxHp) }} /></div>
           <div className="hud-xp-line"><span>XP</span><div className="hud-xp-track" role="progressbar" aria-label="Expérience" aria-valuemin={0} aria-valuemax={run.xpToNext} aria-valuenow={run.xp}><i style={{ width: percentage(run.xp, run.xpToNext) }} /></div><small>{run.xp}/{run.xpToNext}</small></div>
         </div>
-        <button className="hud-build-seal" aria-label={`Passif de départ : ${PASSIVES.find((entry) => entry.id === run.passives[0]?.id)?.name ?? 'Aucun'}`} data-tip={PASSIVES.find((entry) => entry.id === run.passives[0]?.id)?.description} disabled={screen === 'combat'} onClick={() => { setScreen('stats'); sceneRef.current?.togglePause(true); }}>{run.passives[0] && <ItemIcon id={run.passives[0].id} rarity={passiveRarity(PASSIVES.find((entry) => entry.id === run.passives[0].id)?.weight ?? 5)} size={36} />}</button>
+        <button className="hud-build-seal" aria-label={`Passif de départ : ${PASSIVES.find((entry) => entry.id === run.passives[0]?.id)?.name ?? 'Aucun'}`} data-tip={PASSIVES.find((entry) => entry.id === run.passives[0]?.id)?.description} disabled={screen === 'combat'} onClick={() => openInventory('stats')}>{run.passives[0] && <ItemIcon id={run.passives[0].id} rarity={passiveRarity(PASSIVES.find((entry) => entry.id === run.passives[0].id)?.weight ?? 5)} size={36} />}</button>
       </section>
       <nav className="hud-utilities" aria-label="Options du jeu">
         <button aria-label="Succès" data-tip="Succès" disabled={screen === 'combat'} onClick={() => { setScreen('achievements'); sceneRef.current?.togglePause(true); }}><MenuIcon id="achievements" size={22} /></button>
@@ -543,18 +546,12 @@ export function App() {
       </nav>
       <nav className="hud-actions" aria-label="Menu du jeu">
         <button aria-label="Zones et butins" disabled={screen === 'combat'} onClick={() => setScreen('loot')}><MenuIcon id="loot" size={26} /><span>Butin</span><kbd>L</kbd></button>
-        <button aria-label="Inventaire" disabled={screen === 'combat'} onClick={openInventory}><MenuIcon id="inventory" size={26} /><span>Sac</span><kbd>I</kbd></button>
-        <button className={run.unspentPoints > 0 ? 'has-alert' : ''} aria-label={run.unspentPoints > 0 ? `Personnage : ${run.unspentPoints} points à répartir` : 'Personnage'} disabled={screen === 'combat'} onClick={() => { setScreen('stats'); sceneRef.current?.togglePause(true); }}><MenuIcon id="character" size={26} /><span>Build</span><kbd>C</kbd>{run.unspentPoints > 0 && <b className="alert-badge">{run.unspentPoints}</b>}</button>
+        <button className={`inventory-action${run.unspentPoints > 0 ? ' has-alert' : ''}`} aria-label={run.unspentPoints > 0 ? `Inventaire : ${run.unspentPoints} points à répartir` : 'Inventaire'} disabled={screen === 'combat'} onClick={() => openInventory()}><MenuIcon id="inventory" size={26} /><span>Inventaire</span><kbd>I</kbd>{run.unspentPoints > 0 && <b className="alert-badge">{run.unspentPoints}</b>}</button>
       </nav>
     </header>
     <section className={`stage ${screen === 'summary' ? 'stage-hidden' : ''}`} aria-label="Carte du monde">
       <div id="game-canvas" />
-      {!worldReady && <div className="loading-screen" role="status" aria-live="polite">
-        <div className="title-grid" aria-hidden="true" />
-        <NeonLogo size={72} />
-        <p>Chargement du monde</p>
-        <div className="loading-bar" aria-hidden="true"><i /></div>
-      </div>}
+      {!worldReady && <LoadingScreen zone={zoneAt(run.position.x, run.position.y).name} />}
       {screen !== 'world' && <div className="stage-veil" />}
       <div className="world-location" aria-label="Zone actuelle"><strong>{zoneAt(run.position.x, run.position.y).name}</strong><span>Niveau {zoneAt(run.position.x, run.position.y).level}</span></div>
       <div className="encounter-bar" role="progressbar" aria-label="Danger" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(run.encounterMeter / BALANCE.maxEncounterMeter * 100)} data-danger={run.encounterMeter >= .75 * BALANCE.maxEncounterMeter ? 'high' : 'normal'}>
@@ -580,48 +577,23 @@ export function App() {
     </section>
 
     {screen === 'combat' && combat && <BattleScene combat={combat} hero={run.hero} heroName={HEROES[run.hero].name}
-      heroColor={HEROES[run.hero].color} zoneId={zoneAt(run.position.x, run.position.y).id} target={targetRef.current ?? 0}
+      zoneId={zoneAt(run.position.x, run.position.y).id} target={targetRef.current ?? 0}
       speed={settings.combatSpeed} saveError={!!error}
       onTarget={(index) => { targetRef.current = index; syncCombat({ ...combat }); }}
       onRetry={() => { setError(''); void resolveCombat(combat); }} />}
-    {screen === 'combat' && combat && recap && <CombatRecap recap={recap} points={run.unspentPoints}
-      stats={(['strength', 'speed', 'luck', 'defense', 'maxHp'] as const).map((key) => ({ key, label: statLabel(key) }))}
-      onSpend={(key, amount) => pickStat(key as keyof typeof HEROES.warrior.stats, amount)} onContinue={continueAfterCombat} />}
+    {screen === 'combat' && combat && recap && <CombatRecap recap={recap} hero={run.hero} points={run.unspentPoints}
+      onInventory={() => { setRecap(null); syncCombat(null); openInventory('stats'); }} onContinue={continueAfterCombat} />}
 
     {screen === 'loot' && <ZoneLoot run={run} profile={profile} onClose={backToWorld} />}
-    {screen === 'inventory' && <InventoryPage run={run} onChange={persistRun} onClose={backToWorld} />}
-
-    {screen === 'stats' && <section className="panel modal-panel">
-      <PanelHeading label="PERSONNAGE" title="Statistiques & maîtrise" onClose={backToWorld} />
-        <><HeroIdentity hero={run.hero} level={run.level} subtitle="VOTRE BUILD" /><div className="stat-grid">{(Object.entries(stats ?? {}) as [string, number][]).map(([key, value]) => <div key={key}><StatIcon stat={key} /><span>{statLabel(key)}</span><strong>{Number.isInteger(value) ? value : value.toFixed(2)}</strong></div>)}</div>
-        {run.unspentPoints > 0 && <div className="points-panel"><strong>{run.unspentPoints} points à répartir</strong>{(['strength', 'speed', 'luck', 'defense', 'maxHp'] as const).map((stat) => <div className="point-row" key={stat}><span>{statLabel(stat)}</span>{Array.from(new Set([1, 5, run.unspentPoints])).map((amount) => <button key={amount} onClick={() => pickStat(stat, amount)}>{amount === run.unspentPoints ? 'Tout' : `+${amount}`}</button>)}</div>)}
-          {Object.values(run.invested).some((value) => (value ?? 0) > 0) && <button className="respec-button" onClick={() => persistRun(respecStats(run))}>Réinitialiser les points (gratuit)</button>}
-        </div>}
-        <MasteryPanel hero={run.hero} levels={profile.mastery[run.hero]} />
-        <p className="small-note">Réattribution des statistiques gratuite dans ce prototype.</p>
-        <div className="passive-list">{run.passives.map((passive) => {
-          const definition = PASSIVES.find((entry) => entry.id === passive.id);
-          const rarity = passiveRarity(definition?.weight ?? 5);
-          return <span key={passive.id} className={`rarity-${rarity}`} style={{ color: RARITIES[rarity].color, borderLeft: `3px solid ${RARITIES[rarity].color}` }}><ItemIcon id={passive.id} rarity={rarity} size={26} />{definition?.name} · rang {passive.rank}</span>;
-        })}</div>
-        </>
-    </section>}
+    {screen === 'inventory' && <InventoryPage key={inventoryTab} run={run} profile={profile} initialTab={inventoryTab} onChange={persistRun} onClose={backToWorld} />}
 
     {screen === 'settings' && <SettingsPage settings={settings} setSettings={setSettings} onBack={backToWorld} inGame />}
 
     {screen === 'achievements' && <AchievementsPage profile={profile} onBack={backToWorld} inGame />}
 
-    {screen === 'summary' && <section className="panel modal-panel summary-panel">
-      <HeroPortrait hero={run.hero} className="summary-portrait" /><p className="eyebrow">BILAN DE PARTIE</p><h2>{run.result === 'victory' ? 'Seuil franchi' : 'Le dernier souffle'}</h2>
-      <p>{HEROES[run.hero].name} · niveau {run.level} · {run.kills} élimination(s) · {run.victories} combat(s)</p>
-      <p>Secrets découverts : {run.secrets.length} · Boss vaincus : {run.defeatedBosses.length}</p>
-      <h3>Objets obtenus</h3><div className="summary-loot">{run.inventory.map((instance) => { const item = ITEMS.find((item) => item.id === instance.itemId); return item ? <span key={instance.instanceId} title={item.name}><ItemIcon id={item.id} rarity={item.rarity} size={48} /><small>{item.name}</small></span> : null; })}</div>
-      <h3>Déblocages permanents</h3><p>{profile.achievements.map((id) => ACHIEVEMENTS.find((entry) => entry.id === id)?.name).filter(Boolean).join(' · ') || 'Aucun pour le moment'}</p>
-      <button className="primary" onClick={() => {
-        syncRun(null); syncCombat(null); setScreen('title');
-        void saveRun(null).catch((saveError: unknown) => setError(saveError instanceof Error ? saveError.message : 'Échec de sauvegarde.'));
-      }}>Nouvelle partie</button>
-    </section>}
+    {screen === 'summary' && <RunSummary run={run} profile={profile}
+      onTitle={() => { syncRun(null); syncCombat(null); setScreen('title'); void saveRun(null).catch((saveError: unknown) => setError(saveError instanceof Error ? saveError.message : 'Échec de sauvegarde.')); }}
+      onNewGame={() => { syncRun(null); syncCombat(null); setScreen('title'); setNewRunSelection(true); void saveRun(null).catch((saveError: unknown) => setError(saveError instanceof Error ? saveError.message : 'Échec de sauvegarde.')); }} />}
     {error && <div className="toast error">{error}<button onClick={() => setError('')}>×</button></div>}
     <MenuFooter /><p className="sr-only">Commandes : flèches pour naviguer, Entrée pour valider, Échap pour fermer.</p>
   </main>;
@@ -648,25 +620,3 @@ function MasterySegments({ levels }: { levels: number }) {
     </div>
   </div>;
 }
-
-function MasteryPanel({ hero, levels }: { hero: HeroId; levels: number }) {
-  const rank = masteryRank(levels);
-  const floor = rank === 0 ? 0 : masteryLevelsForRank(rank);
-  const next = rank >= MASTERY_MAX_RANK ? floor : masteryLevelsForRank(rank + 1);
-  const ratio = next === floor ? 1 : (levels - floor) / (next - floor);
-  const rewards = [...STARTING_OPTIONS[hero].weapons.map((option) => ({ ...option, kind: 'Équipement', name: ITEMS.find((item) => item.id === option.id)?.name })), ...STARTING_OPTIONS[hero].passives.map((option) => ({ ...option, kind: 'Passif', name: PASSIVES.find((passive) => passive.id === option.id)?.name }))].filter((option) => option.masteryRequired > 0).sort((a,b) => a.masteryRequired - b.masteryRequired);
-  return <div className="mastery-panel">
-    <div className="mastery-head"><strong>Maîtrise {HEROES[hero].name} · niveau {rank}</strong><span>{levels} niveaux gagnés{rank < MASTERY_MAX_RANK ? ` · prochain palier : ${next}` : ' · maximum'}</span></div>
-    <div className="mastery-track"><i style={{ width: `${Math.round(ratio * 100)}%` }} /></div>
-    <ul className="mastery-rewards">{rewards.map((reward) => <li key={reward.id} className={rank >= reward.masteryRequired ? 'reached' : ''}><b>Maîtrise {reward.masteryRequired}</b> · {reward.kind} de départ « {reward.name} »</li>)}</ul>
-  </div>;
-}
-
-function PanelHeading({ label, title, onClose }: { label: string; title: string; onClose?: () => void }) {
-  return <div className="panel-heading"><div><p className="eyebrow">{label}</p><h2>{title}</h2></div>{onClose && <button onClick={onClose}>Retour <kbd>Échap</kbd></button>}</div>;
-}
-
-function statLabel(key: string): string {
-  return ({ strength: 'Force', speed: 'Vitesse', luck: 'Chance', critChance: 'Critique', critDamage: 'Dégâts critiques', maxHp: 'PV maximum', defense: 'Défense' })[key] ?? key;
-}
-

@@ -1,8 +1,8 @@
 ﻿import Phaser from 'phaser';
 import { BALANCE, ENEMIES, ZONES } from './content';
 import { bossSvg } from '../ui/bossSvg';
-import { drawDecorArt } from './decorArt';
-import { moveWithSliding, obstacleField, PLAYER_RADIUS, type ClearanceField, type CircleObstacle } from './movement';
+import { WorldArtCache } from './WorldArtCache';
+import { moveWithSliding, movementSpeed, obstacleField, PLAYER_RADIUS, type ClearanceField, type CircleObstacle } from './movement';
 import { heroSvg } from '../ui/heroSvg';
 import type { HeroId } from './types';
 import {
@@ -20,7 +20,6 @@ export interface MapCallbacks {
   ready?(scene: PlatformScene): void;
 }
 
-const PLAYER_SPEED = 175;
 interface BossEntry { id: string; body: Phaser.GameObjects.Zone; art?: Phaser.GameObjects.Image }
 const SOLID_KINDS: Partial<Record<Decor['kind'], number>> = {
   tree: 0.4, rock: 0.45, pond: 0.48, pillar: 0.45, tombstone: 0.4, lava: 0.45, obsidian: 0.42, 'dead-tree': 0.3, log: 0.3, house: 0.5, well: 0.4, cart: 0.4,
@@ -40,10 +39,11 @@ export class PlatformScene extends Phaser.Scene {
   private facingBlend = 1;
   private walkPhase = 0;
   private reduceMotion = false;
+  private moveSpeed = movementSpeed(8);
   private held = new Set<string>();
   private moveKeys = { up: 'KeyW', down: 'KeyS', left: 'KeyA', right: 'KeyD' };
   private collisionField!: ClearanceField;
-  private detailLayers: { graphics: Phaser.GameObjects.Graphics; x: number; y: number }[] = [];
+  private worldArt!: WorldArtCache;
   private bosses: BossEntry[] = [];
   private trail!: Phaser.GameObjects.Graphics;
   private trailPoints: { x: number; y: number }[] = [];
@@ -52,6 +52,8 @@ export class PlatformScene extends Phaser.Scene {
   private traveled = 0;
   private lastX = 0;
   private lastY = 0;
+  private reportedX = 0;
+  private reportedY = 0;
   private seenSecrets = new Set<string>();
   private lastDevice: 'keyboard' | 'gamepad' = 'keyboard';
 
@@ -70,6 +72,7 @@ export class PlatformScene extends Phaser.Scene {
   }
 
   setReduceMotion(reduced: boolean): void { this.reduceMotion = reduced; }
+  setMovementSpeed(speed: number): void { this.moveSpeed = movementSpeed(speed); }
 
   private animatePlayer(x: number, y: number, distance: number, delta: number): void {
     const moving = distance > 0.05;
@@ -131,10 +134,6 @@ export class PlatformScene extends Phaser.Scene {
     return (mix(16) << 16) | (mix(8) << 8) | mix(0);
   }
 
-  private drawDecor(graphics: Phaser.GameObjects.Graphics, decor: Decor): void {
-    drawDecorArt(graphics, decor);
-  }
-
   private contourLoops(step = 4): { x: number; y: number }[][] {
     const columns = Math.ceil(WORLD_WIDTH / step) + 1;
     const rows = Math.ceil(WORLD_HEIGHT / step) + 1;
@@ -186,14 +185,14 @@ export class PlatformScene extends Phaser.Scene {
     return loops;
   }
 
-  private drawContour(graphics: Phaser.GameObjects.Graphics): void {
+  private drawContour(art: WorldArtCache): void {
     for (const loop of this.contourLoops()) {
       const zoneOf = (point: { x: number; y: number }) => zoneScores(point.x, point.y)[0].zone.id;
       let run = [loop[0]];
       let zone = zoneOf(loop[0]);
       const flush = (closing: { x: number; y: number }) => {
         const path = [...run, closing];
-        for (const [width, alpha] of [[7, 0.06], [3.2, 0.18], [1.4, 1]]) graphics.lineStyle(width, neonOf(zone), alpha).strokePoints(path, false);
+        for (const [width, alpha] of [[7, 0.06], [3.2, 0.18], [1.4, 1]]) art.strokePath(path, width, neonOf(zone), alpha);
       };
       for (let index = 1; index <= loop.length; index++) {
         const point = loop[index % loop.length];
@@ -210,39 +209,26 @@ export class PlatformScene extends Phaser.Scene {
   private buildWorld(): void {
     this.paintGround();
     const decor = generateDecor();
-    const graphics = this.add.graphics().setDepth(1);
+    const art = new WorldArtCache(this);
     // Sols construits : chemins de terre, chaussées et galeries donnent un sens au parcours.
-    for(const zone of ZONES) graphics.lineStyle(zone.id==='crypt'||zone.id==='marsh'?42:32,neonOf(zone.id),.045).strokePoints(ZONE_ROUTES[zone.id],false);
+    for(const zone of ZONES) art.strokePath(ZONE_ROUTES[zone.id],zone.id==='crypt'||zone.id==='marsh'?42:32,neonOf(zone.id),.045);
     for (const path of PATHS) {
       const built = path.zone === 'crypt' || path.zone === 'marsh';
       const main=ZONE_ROUTES[path.zone].some((point,index)=>point===path.from&&ZONE_ROUTES[path.zone][index+1]===path.to);
-      if(!main) graphics.lineStyle(built?42:32,neonOf(path.zone),.045).lineBetween(path.from.x,path.from.y,path.to.x,path.to.y);
+      if(!main) art.strokePath([path.from,path.to],built?42:32,neonOf(path.zone),.045);
       if(built) {
         const length=Phaser.Math.Distance.Between(path.from.x,path.from.y,path.to.x,path.to.y);
         const nx=-(path.to.y-path.from.y)/length,ny=(path.to.x-path.from.x)/length;
         for(let d=0;d<length;d+=path.zone==='marsh'?18:30) {
           const x=path.from.x+(path.to.x-path.from.x)*d/length,y=path.from.y+(path.to.y-path.from.y)*d/length;
-          graphics.lineStyle(1,neonOf(path.zone),.12).lineBetween(x+nx*20,y+ny*20,x-nx*20,y-ny*20);
+          art.strokePath([{x:x+nx*20,y:y+ny*20},{x:x-nx*20,y:y-ny*20}],1,neonOf(path.zone),.12);
         }
       }
     }
-    this.drawContour(graphics);
+    this.drawContour(art);
     decor.sort((a, b) => Number(!!SOLID_KINDS[a.kind]) - Number(!!SOLID_KINDS[b.kind]) || a.y - b.y);
-    // Keep the outlines vector-based at every camera zoom. Cull off-screen chunks
-    // rather than baking the entire world into an enlarged low-resolution bitmap.
-    const chunks = new Map<string, Phaser.GameObjects.Graphics>();
-    this.detailLayers = [];
-    for (const entry of decor) {
-      const x = Math.floor(entry.x/512)*512, y = Math.floor(entry.y/512)*512;
-      const key = `${x},${y}`;
-      let detail = chunks.get(key);
-      if (!detail) {
-        detail = this.add.graphics({ x, y }).setDepth(1.1);
-        chunks.set(key, detail);
-        this.detailLayers.push({ graphics: detail, x, y });
-      }
-      this.drawDecor(detail, { ...entry, x: entry.x-x, y: entry.y-y });
-    }
+    for (const entry of decor) art.drawDecor(entry);
+    this.worldArt = art;
     const obstacles: CircleObstacle[] = [];
     for (const entry of decor) {
       const ratio = SOLID_KINDS[entry.kind];
@@ -329,11 +315,16 @@ export class PlatformScene extends Phaser.Scene {
     this.cameras.main.setBounds(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
     this.cameras.main.setZoom(this.cameraZoom(this.scale.height));
     this.cameras.main.startFollow(this.player, true, 0.12, 0.12);
+    this.cameras.main.centerOn(spawn.x, spawn.y);
+    this.cameras.main.preRender();
+    this.worldArt.update(this.cameras.main.worldView);
     this.cameras.main.setBackgroundColor(0x06090d);
     this.scale.on('resize', (size: Phaser.Structs.Size) => this.cameras.main.setZoom(this.cameraZoom(size.height)));
     this.input.keyboard?.on('keydown', () => this.setDevice('keyboard'));
     this.lastX = this.startPosition.x;
     this.lastY = this.startPosition.y;
+    this.reportedX = this.lastX;
+    this.reportedY = this.lastY;
     this.events.on('resume-position', (x: number, y: number) => this.player.setPosition(x, y));
     this.callbacks.ready?.(this);
   }
@@ -345,11 +336,7 @@ export class PlatformScene extends Phaser.Scene {
   }
 
   update(_time: number, delta: number): void {
-    const view = this.cameras.main.worldView;
-    for (const layer of this.detailLayers) layer.graphics.setVisible(
-      layer.x-128 < view.right && layer.x+640 > view.left &&
-      layer.y-128 < view.bottom && layer.y+640 > view.top,
-    );
+    this.worldArt.update(this.cameras.main.worldView);
     if (this.physics.world.isPaused) { this.animatePlayer(0, 0, 0, delta); return; }
     const controller = navigator.getGamepads?.().find((gamepad) => gamepad?.connected) ?? null;
     const down = (code: string, alt: string) => Number(this.held.has(code) || this.held.has(alt));
@@ -370,7 +357,7 @@ export class PlatformScene extends Phaser.Scene {
     const dt = Math.min(delta, 100) / 1000;
     const aliveBosses = this.bosses.filter(boss => !this.callbacks.isBossDefeated?.(boss.id));
     const field: ClearanceField = (px,py) => aliveBosses.reduce((distance,boss) => Math.min(distance,Math.hypot(px-boss.body.x,py-boss.body.y)-BOSS_BLOCK_RADIUS),this.collisionField(px,py));
-    const position = moveWithSliding({x:this.player.x,y:this.player.y},{x:x*PLAYER_SPEED*dt,y:y*PLAYER_SPEED*dt},field);
+    const position = moveWithSliding({x:this.player.x,y:this.player.y},{x:x*this.moveSpeed*dt,y:y*this.moveSpeed*dt},field);
     this.player.body.reset(position.x,position.y);
     for(const boss of aliveBosses) {
       const dx=position.x-boss.body.x,dy=position.y-boss.body.y;
@@ -389,6 +376,8 @@ export class PlatformScene extends Phaser.Scene {
         const actual = this.traveled;
         this.traveled = 0;
         this.callbacks.moved(this.player.x, this.player.y, actual);
+        this.reportedX = this.player.x;
+        this.reportedY = this.player.y;
       }
     }
     this.callbacks.travel?.(this.traveled);
@@ -397,9 +386,11 @@ export class PlatformScene extends Phaser.Scene {
       boss.art?.setVisible(alive);
     }
     this.drawTrail();
-    if (_time - this.lastReport > 250) {
+    if (_time - this.lastReport > 250 && (this.player.x !== this.reportedX || this.player.y !== this.reportedY)) {
       this.lastReport = _time;
       this.callbacks.moved(this.player.x, this.player.y, 0);
+      this.reportedX = this.player.x;
+      this.reportedY = this.player.y;
     }
     if (!this.seenSecrets.has('one') && Phaser.Math.Distance.Between(this.player.x, this.player.y, SECRET_POSITIONS['secret-one'].x, SECRET_POSITIONS['secret-one'].y) < 26) {
       this.seenSecrets.add('one');
@@ -435,5 +426,7 @@ export class PlatformScene extends Phaser.Scene {
     this.lastY = y;
     this.traveled = 0;
     this.callbacks.moved(x, y, 0);
+    this.reportedX = x;
+    this.reportedY = y;
   }
 }

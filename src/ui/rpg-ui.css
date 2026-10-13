@@ -192,8 +192,8 @@ button[aria-pressed='true'] { border-color: #74d9c9; background: #2ee6c815; colo
 /* Settings, battle and end-of-run presentation */
 .settings-body { grid-template-columns: 1fr 1fr; gap: 24px; }.settings-group { border: 1px solid #4a697844; padding: 20px; background: #06141e; }.settings-group h3 { display: flex; align-items: center; gap: 12px; font-size: 16px; font-weight: 400; color: var(--game-gold); margin-bottom: 12px; }.settings-group button { background: #0b2230; border-color: #4a697855; border-radius: 0; }.settings-body .menu-footer { grid-column: 1 / -1; }.setting-row { font-size: 14px; gap: 10px; }.setting-row .button-group { flex-wrap: wrap; }.binding-grid { grid-template-columns: 1fr 1fr; }.binding { font-size: 14px; padding: 10px; }.setting-row input[type='range'] { min-width: 70px; width: 100%; }
 .battle-speed { left: 24px; transform: none; border-left: 2px solid var(--glow); padding: 10px 14px; background: #06121ecc; opacity: 1; }
-.fighter-sprite svg [fill]:not([fill='none']):not([fill='#000']) { fill-opacity: .7; }
-.fighter-sprite svg [stroke='#12161c'] { stroke: color-mix(in srgb, var(--neon) 65%, #06101a); stroke-width: 2; }
+.battle .fighter-sprite, .battle .enemy-fighter.targeted .fighter-sprite { filter: none; animation: fighter-idle 2.6s ease-in-out infinite; }
+.battle .fighter-sprite.is-hit { animation: fighter-idle 2.6s ease-in-out infinite, fighter-hit .35s ease-out; }
 .battle .battle-log { left: auto; right: 24px; bottom: 24px; transform: none; width: min(450px, 47vw); border-radius: 0; border: 0; border-left: 1px solid var(--glow); padding: 10px 16px; background: linear-gradient(90deg, #071522dd, #07152277); }
 .battle .battle-log p { font-size: 14px; }.fighter-name { letter-spacing: .12em; margin-top: 12px; }.fighter-hp { border-radius: 0; height: 7px; }
 .recap-overlay { background: #03090dbb; backdrop-filter: blur(8px); }.recap-card { width: min(720px, calc(100vw - 36px)); max-height: 88dvh; overflow-y: auto; border-radius: 0; border: 1px solid #e6c68a66; border-top: 2px solid var(--game-gold); background: radial-gradient(ellipse at 50% 0, #23463777, transparent 70%), #07121ef5; padding: 28px 40px; }

@@ -23,7 +23,7 @@ export function BestiaryPage({ profile, onBack }: { profile: Profile; onBack(): 
     .map((entry) => ({ ...entry, probability: odds.entries.filter((candidate) => candidate.itemId === entry.itemId).reduce((total, candidate) => total + candidate.probability, 0) }));
   const selectedLoot = lootRows.find((entry) => entry.itemId === itemId) ?? lootRows[0];
   const zones = ZONES.filter((entry) => entry.boss === enemyId || (entry.enemies as readonly string[]).includes(enemyId));
-  const presence = Array.from({ length: zone.maxGroup }, (_, index) => 1 - (1 - 1 / zone.enemies.length) ** (index + 1)).reduce((sum, chance) => sum + chance, 0) / zone.maxGroup;
+  const monsterChance = 1 / zone.enemies.length;
   const unlock = selectedLoot?.item.unlockAchievement ? ACHIEVEMENTS.find((entry) => entry.id === selectedLoot.item.unlockAchievement) : undefined;
   return <section className="shell title-screen classes-page bestiary-page" aria-label="Bestiaire">
     <SpaceBackdrop />
@@ -35,7 +35,7 @@ export function BestiaryPage({ profile, onBack }: { profile: Profile; onBack(): 
       })}</nav>
       <article className="bestiary-character"><h2>{enemy.name}</h2><div className="bestiary-portrait-slot"><MonsterPortrait id={enemy.id} color={enemy.color} /></div>
         <div className="bestiary-stats">{[{ id: 'maxHp', label: 'Vie', value: enemy.hp }, { id: 'strength', label: 'Force', value: enemy.strength }, { id: 'defense', label: 'Défense', value: enemy.defense }, { id: 'speed', label: 'Vitesse', value: enemy.speed }, { id: 'luck', label: 'XP', value: enemy.xp }].map((stat) => <span key={stat.label}><StatIcon stat={stat.id} /><strong>{stat.value}</strong><small>{stat.label}</small></span>)}</div>
-        <div className="bestiary-encounters"><p>{boss ? 'Boss fixe · combat au contact' : `${pct(presence)} des combats aléatoires de cette zone contiennent ce monstre`}</p><small>{zones.map((zone) => zone.name).join(' · ')}</small></div>
+        <div className="bestiary-encounters"><p>{boss ? 'Boss fixe · combat au contact' : `${pct(monsterChance)} de chance pour chaque monstre tiré`}</p>{!boss && <small>{zone.maxGroup === 1 ? 'Un monstre par combat' : `Groupes de 1 à ${zone.maxGroup} · chaque monstre est tiré séparément`}</small>}<small>{zones.map((zone) => zone.name).join(' · ')}</small></div>
       </article>
       <article className="bestiary-loot"><header><h2>Table de butin</h2><button className="bestiary-unlock-toggle" aria-pressed={allUnlocked} onClick={() => setAllUnlocked(!allUnlocked)}>{allUnlocked ? 'Tous débloqués' : 'Mon profil'}</button></header>
         <p className="bestiary-loot-basis">Taux de drop de base · {pct(odds.chance)} d’obtenir un objet</p>

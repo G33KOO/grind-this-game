@@ -4,6 +4,7 @@ import type { AchievementDefinition, CombatState, Effect, HeroId, ItemDefinition
 
 export const clamp = (value: number, min: number, max: number): number =>
   Math.min(max, Math.max(min, Number.isFinite(value) ? value : min));
+export const BALANCE_VERSION = 2;
 
 export function nextRandom(state: number): { value: number; state: number } {
   let next = state >>> 0;
@@ -40,7 +41,7 @@ export function rememberLoadout(profile: Profile, hero: HeroId, loadout: Loadout
 export function newRun(hero: HeroId, seed = 0x71a9c3, loadout?: Required<Loadout>): RunState {
   const start = HEROES[hero];
   const run: RunState = {
-    version: 2, worldVersion: WORLD_VERSION, developerMode: false, hero, level: 1, xp: 0, xpToNext: 60, unspentPoints: 0, invested: {},
+    version: 2, worldVersion: WORLD_VERSION, balanceVersion: BALANCE_VERSION, developerMode: false, hero, level: 1, xp: 0, xpToNext: 60, unspentPoints: 0, invested: {},
     hp: start.stats.maxHp, position: { ...WORLD_START }, encounterMeter: 0, distanceSinceEncounterCheck: 0, rngState: seed >>> 0 || 1,
     inventory: [
       { instanceId: 'starter-weapon', itemId: loadout?.weapon ?? start.startingItem },
@@ -73,9 +74,10 @@ export function deriveStats(run: RunState): Stats {
     const passive = PASSIVES.find((candidate) => candidate.id === rank.id);
     if (passive && (passive.hero === run.hero || passive.hero === 'both')) addStats(passive.stats, rank.rank);
   }
-  result.speed = Math.max(0.2, result.speed);
+  for (const key of Object.keys(result) as (keyof Stats)[]) result[key] = Math.round(result[key]);
+  result.speed = Math.max(1, result.speed);
   result.critChance = clamp(result.critChance, 0, BALANCE.criticalChanceCap);
-  result.critDamage = clamp(result.critDamage, 1, 4);
+  result.critDamage = clamp(result.critDamage, 100, 400);
   result.maxHp = Math.max(1, Math.round(result.maxHp));
   result.defense = Math.max(0, result.defense);
   result.strength = Math.max(0, result.strength);
@@ -123,7 +125,8 @@ export function allocatePoints(run: RunState, stat: keyof Stats, amount: number)
 export function respecStats(run: RunState): RunState {
   if (!BALANCE.respecAllowed) return run;
   const refunded = Object.values(run.invested).reduce((sum, value) => sum + (value ?? 0), 0);
-  return { ...run, invested: {}, unspentPoints: run.unspentPoints + refunded };
+  const updated = { ...run, invested: {}, unspentPoints: run.unspentPoints + refunded };
+  return { ...updated, hp: Math.min(run.hp, deriveStats(updated).maxHp) };
 }
 
 export function advanceEncounter(run: RunState, distance: number, profile: Profile): { run: RunState; triggered: boolean } {
@@ -171,16 +174,19 @@ export function encounterChance(meter: number): number {
 
 /** Exact probabilities per defeated monster, shared by the loot roll and UI. */
 export function lootOdds(run: RunState, enemyId: string, profile: Profile) {
-  return lootOddsForLuck(deriveStats(run).luck, enemyId, profile);
+  return lootOddsForLuck(deriveStats(run).luck, enemyId, profile, run.inventory.map((item) => item.itemId));
 }
 
-export function lootOddsForLuck(luck: number, enemyId: string, profile: Profile) {
+export function lootOddsForLuck(luck: number, enemyId: string, profile: Profile, ownedItemIds: readonly string[] = []) {
+  const ownedIds = new Set(ownedItemIds);
   const chance = clamp(0.12 * (1 + luck * 0.025), 0.03, 0.45);
   const entries = (ENEMIES.find((enemy) => enemy.id === enemyId)?.loot ?? []).map((entry) => {
     const item = ITEMS.find((item) => item.id === entry.itemId)!;
     const unlocked = canDrop(entry.itemId, profile);
+    const owned = ownedIds.has(entry.itemId);
+    const eligible = unlocked && (!owned || item.slot === 'consumable');
     const bonus = item.rarity === 'epic' ? 0.055 : item.rarity === 'rare' ? 0.035 : 0;
-    return { ...entry, item, unlocked, effectiveWeight: unlocked ? entry.weight * (1 + luck * bonus) : 0 };
+    return { ...entry, item, unlocked, owned, eligible, effectiveWeight: eligible ? entry.weight * (1 + luck * bonus) : 0 };
   });
   const total = entries.reduce((sum, entry) => sum + entry.effectiveWeight, 0);
   return { chance: total > 0 ? chance : 0, entries: entries.map((entry) => ({ ...entry,
@@ -196,7 +202,7 @@ export function rollLoot(run: RunState, enemyId: string, profile: Profile): { ru
   let roll = nextRandom(rngState);
   rngState = roll.state;
   if (roll.value >= chance) return { run: { ...run, rngState }, drops: [] };
-  const eligible = odds.entries.filter((entry) => entry.unlocked);
+  const eligible = odds.entries.filter((entry) => entry.eligible);
   const total = eligible.reduce((sum, entry) => sum + entry.effectiveWeight, 0);
   if (!total) return { run: { ...run, rngState }, drops: [] };
   roll = nextRandom(rngState);
@@ -261,13 +267,21 @@ export function startCombat(run: RunState, enemyIds: string[]): CombatState {
   const stats = deriveStats(run);
   const enemies = enemyIds.flatMap((id, index) => {
     const enemy = ENEMIES.find((entry) => entry.id === id);
-    return enemy ? [{ ...enemy, unitId: `${id}-${index}`, currentHp: enemy.hp, nextAction: BALANCE.baseActionTime / enemy.speed, poisonDamage: 0, poisonTurns: 0 }] : [];
+    return enemy ? [{ ...enemy, unitId: `${id}-${index}`, currentHp: enemy.hp, nextAction: 0, poisonDamage: 0, poisonTurns: 0 }] : [];
+  });
+  // One slot per fighter each round. Stable ties: player, then roster order.
+  const initiative = [{ index: -1, speed: stats.speed }, ...enemies.map((enemy,index) => ({ index,speed:enemy.speed }))]
+    .sort((a,b) => b.speed-a.speed || a.index-b.index);
+  let playerNextAction = 0;
+  initiative.forEach(({ index },position) => {
+    const time = (position+1)*BALANCE.baseActionTime;
+    if(index<0)playerNextAction=time;else enemies[index].nextAction=time;
   });
   const effects = activeEffects(run);
   const shield = effects.filter((effect) => effect.kind === 'shield').reduce((sum, effect) => sum + effect.amount, 0);
   return {
     playerHp: run.hp, playerMaxHp: stats.maxHp, playerStats: stats, playerEffects: effects, lifestealRemainder: clamp(run.lifestealRemainder ?? 0, 0, 1 - Number.EPSILON), shield,
-    enemies, time: 0, playerNextAction: BALANCE.baseActionTime / stats.speed,
+    enemies, time: 0, playerNextAction,
     targetIndex: 0, log: ['Le combat commence.'], rngState: run.rngState, over: 'none',
   };
 }
@@ -286,6 +300,7 @@ export function stepCombat(state: CombatState, preferredTarget?: number): Combat
   let rngState = state.rngState;
   let playerNextAction = state.playerNextAction;
   let time = state.time;
+  const roundDuration = (enemies.length+1)*BALANCE.baseActionTime;
   const soonestEnemy = Math.min(...living.map(({ enemy }) => enemy.nextAction));
 
   if (playerNextAction <= soonestEnemy) {
@@ -299,9 +314,10 @@ export function stepCombat(state: CombatState, preferredTarget?: number): Combat
       effect.kind === 'lowHealthDamage' ? sum + effect.ratio : sum, 0) : 0;
     let random = nextRandom(rngState);
     rngState = random.state;
-    const critical = random.value < state.playerStats.critChance;
+    const critical = random.value * 100 < state.playerStats.critChance;
     const base = state.playerStats.strength + offenseBonus;
-    const damage = Math.max(1, Math.round(base * (critical ? state.playerStats.critDamage : 1) * (1 + lowBonus)));
+    const rawDamage = base * (critical ? state.playerStats.critDamage / 100 : 1) * (1 + lowBonus);
+    const damage = damageAfterDefense(rawDamage, target.enemy.defense);
     let dealtDamage = Math.min(target.enemy.currentHp, damage);
     target.enemy.currentHp = Math.max(0, target.enemy.currentHp - damage);
     log = pushLog(log, `Vous infligez ${damage}${critical ? ' critique' : ''} à ${target.enemy.name}.`);
@@ -317,14 +333,14 @@ export function stepCombat(state: CombatState, preferredTarget?: number): Combat
           target.enemy.poisonTurns = Math.min(BALANCE.poisonMaxTurns, Math.max(target.enemy.poisonTurns, effect.turns));
       }
       if (effect.kind === 'extraStrike' && target.enemy.currentHp > 0) {
-        const extraDamage = Math.max(1, Math.round(base * effect.ratio));
+        const extraDamage = damageAfterDefense(base * effect.ratio, target.enemy.defense);
         dealtDamage += Math.min(target.enemy.currentHp, extraDamage);
         target.enemy.currentHp = Math.max(0, target.enemy.currentHp - extraDamage);
         log = pushLog(log, `Frappe supplémentaire : ${target.enemy.name} subit des dégâts.`);
       }
       if (effect.kind === 'cleave') for (const other of living) {
         if (other.index !== target.index && other.enemy.currentHp > 0) {
-          const cleaveDamage = Math.max(1, Math.round(damage * effect.ratio));
+          const cleaveDamage = damageAfterDefense(rawDamage * effect.ratio, other.enemy.defense);
           dealtDamage += Math.min(other.enemy.currentHp, cleaveDamage);
           other.enemy.currentHp = Math.max(0, other.enemy.currentHp - cleaveDamage);
           log = pushLog(log, `Dégâts de zone : ${other.enemy.name} est touché.`);
@@ -341,7 +357,7 @@ export function stepCombat(state: CombatState, preferredTarget?: number): Combat
     } else {
       lifestealRemainder = 0;
     }
-    playerNextAction += BALANCE.baseActionTime / state.playerStats.speed;
+    playerNextAction += roundDuration;
   } else {
     const acting = living.sort((a, b) => a.enemy.nextAction - b.enemy.nextAction || a.index - b.index)[0].enemy;
     time = acting.nextAction;
@@ -358,7 +374,7 @@ export function stepCombat(state: CombatState, preferredTarget?: number): Combat
       playerHp = Math.max(0, playerHp - (hit - absorbed));
       log = pushLog(log, `${acting.name} vous inflige ${hit - absorbed} dégâts${absorbed ? ` (${absorbed} bloqués)` : ''}.`);
     }
-    acting.nextAction += BALANCE.baseActionTime / acting.speed;
+    acting.nextAction += roundDuration;
   }
   const allDead = enemies.every((enemy) => enemy.currentHp <= 0);
   const over = allDead ? 'win' : playerHp <= 0 ? 'loss' : 'none';
@@ -427,7 +443,12 @@ export function validateRun(value: unknown): RunState {
     throw new Error('La sauvegarde contient des statistiques de progression invalides.');
   }
   const currentZone = ZONES.find((zone) => !run.defeatedBosses?.includes(zone.boss)) ?? ZONES[ZONES.length - 1];
-  return { ...run, pendingPassivePicks: 0, worldVersion: WORLD_VERSION, position: run.worldVersion === WORLD_VERSION ? run.position : { ...ZONE_ENTRIES[currentZone.id] } } as RunState;
+  const legacyBalance = run.balanceVersion !== BALANCE_VERSION;
+  const refunded = legacyBalance ? Object.values(run.invested ?? {}).reduce((sum,value) => sum + Math.max(0, Math.round(value ?? 0)), 0) : 0;
+  const updated = { ...run, balanceVersion: BALANCE_VERSION, invested: legacyBalance ? {} : run.invested,
+    unspentPoints: Math.max(0,Math.round(run.unspentPoints ?? 0))+refunded, pendingPassivePicks: 0, worldVersion: WORLD_VERSION,
+    position: run.worldVersion === WORLD_VERSION ? run.position : { ...ZONE_ENTRIES[currentZone.id] } } as RunState;
+  return { ...updated, hp: clamp(Math.round(updated.hp), 0, deriveStats(updated).maxHp) };
 }
 
 export function decodeRun(raw: string): RunState {

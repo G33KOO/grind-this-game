@@ -22,6 +22,8 @@
 .title-screen .bestiary-unlock-toggle { font-size: 14px; padding: 5px 7px; border: 1px solid #52748255; background: transparent; }
 .bestiary-loot-basis { margin: 0; font-size: 14px; color: #8cabbc; line-height: 1.4; }
 .bestiary-loot-list { display: grid; gap: 4px; }
+.bestiary-loot-list .item-icon { display: inline-grid; place-items: center; margin: 0; padding: 0; line-height: 0; }
+.bestiary-loot-list .item-icon > svg { display: block; margin: 0; }
 .title-screen .bestiary-loot-list button { display: grid; grid-template-columns: 32px minmax(0, 1fr) auto; align-items: center; gap: 8px; padding: 3px; min-width: 0; text-align: left; border: 1px solid transparent; background: transparent; font-size: 14px; }
 .bestiary-loot-list .item-icon { border: 0; background: transparent; box-shadow: none; }.bestiary-loot-list small { display: block; font-size: 14px; color: #7993a5; }.bestiary-loot-list strong { font-size: 14px; font-weight: 500; white-space: nowrap; }.bestiary-loot-list .is-locked .item-icon { opacity: .5; filter: grayscale(.6); }
 .title-screen .bestiary-loot-list button[aria-pressed='true'], .title-screen .bestiary-loot-list button:hover { background: #16314344; border-color: #52748244; box-shadow: none; }

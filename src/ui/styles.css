@@ -435,13 +435,6 @@ nav [data-tip]::after { left: auto; right: 0; transform: none; }
 .loadout-actions { display: flex; justify-content: flex-end; }
 
 /* Écran de chargement du monde */
-.loading-screen { position: absolute; inset: 0; z-index: 30; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px; background: radial-gradient(ellipse at center, #08201f 0%, #04080c 70%); }
-.loading-screen > * { position: relative; }
-.loading-screen .title-grid { position: absolute; }
-.loading-screen p { margin: 0; letter-spacing: .32em; text-transform: uppercase; font-size: 13px; color: #9ff7ea; text-shadow: 0 0 10px #2ee6c877; }
-.loading-bar { width: 220px; height: 2px; background: #2ee6c822; overflow: hidden; border-radius: 2px; }
-.loading-bar i { display: block; width: 40%; height: 100%; background: #2ee6c8; box-shadow: 0 0 10px #2ee6c8; animation: loading-slide 1.1s ease-in-out infinite; }
-@keyframes loading-slide { from { transform: translateX(-120%); } to { transform: translateX(260%); } }
 
 .title-actions { display: flex; flex-direction: column; gap: 14px; width: min(320px, 86vw); margin: 34px 0 8px; }
 .title-actions button { width: 100%; padding: 14px 18px; font-size: 14px; }

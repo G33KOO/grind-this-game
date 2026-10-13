@@ -2,6 +2,11 @@ import { HEROES } from '../game/content';
 import type { HeroId } from '../game/types';
 import { EnemyArt, HeroArt } from './BattleScene';
 import { HERO_ACCENT } from './icons';
+import type { Stats } from '../game/types';
+
+export function formatStatValue(stat: keyof Stats, value: number): string {
+  return stat === 'critChance' || stat === 'critDamage' ? `${Math.round(value)} %` : String(Math.round(value));
+}
 
 export function HeroPortrait({ hero, className = '' }: { hero: HeroId; className?: string }) {
   return <div className={`hero-portrait ${className}`} style={{ ['--accent' as string]: HERO_ACCENT[hero] }} aria-hidden="true">
@@ -45,7 +50,7 @@ export function MenuIcon({ id, size = 24 }: { id: MenuIconId; size?: number }) {
 }
 
 export function StatIcon({ stat }: { stat: string }) {
-  const glyphs: Record<string, string> = { strength: '⚔', speed: '➤', luck: '✦', critChance: '◎', critDamage: '✧', maxHp: '♥', defense: '⬡' };
+  const glyphs: Record<string, string> = { strength: '⚔', speed: '➤', luck: '✦', critChance: '◎', critDamage: '✧', maxHp: '♥', defense: '⬡', lifesteal: '♥', shield: '⬡', damageReduction: '⬡', extraStrike: '⚔', cleave: '✺', poisonDamage: '◈', poisonTurns: '◷', lowHealthDamage: '✹', defenseDamage: '⚔' };
   return <span className={`stat-glyph stat-${stat}`} aria-hidden="true">{glyphs[stat] ?? '◇'}</span>;
 }
 

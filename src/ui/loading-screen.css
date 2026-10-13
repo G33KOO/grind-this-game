@@ -1,0 +1,18 @@
+.loading-screen { position: fixed; inset: 0; z-index: 90; display: grid; place-items: center; padding: 24px; overflow: hidden; background: #030810; isolation: isolate; }
+.loading-screen > .space-backdrop { position: absolute; inset: 0; z-index: -1; overflow: hidden; pointer-events: none; background: radial-gradient(ellipse at 70% 25%, #0c132e, #030810 70%); }
+.loading-content { width: min(380px, 100%); display: flex; flex-direction: column; align-items: center; text-align: center; }
+.loading-emblem { position: relative; display: grid; place-items: center; width: 190px; height: 190px; margin-bottom: 20px; }
+.loading-orbit { position: absolute; inset: 0; border: 1px solid #2ee6c81c; border-radius: 50%; }
+.loading-orbit::after { content: ''; position: absolute; inset: -1px; border: 1px solid transparent; border-top-color: #2ee6c88a; border-radius: 50%; animation: loading-orbit-turn 5s linear infinite; }
+.loading-wordmark { display: flex; align-items: baseline; justify-content: center; gap: 14px; margin: 0; color: #e5f4f5; font-size: clamp(44px, 7vw, 64px); font-weight: 700; line-height: 1.1; letter-spacing: .06em; white-space: nowrap; }
+.loading-wordmark span { color: #2ee6c8; font-size: .6em; letter-spacing: .12em; }
+.loading-destination { display: grid; gap: 10px; margin-top: 40px; }
+.loading-destination > span { color: #8daab9; font-size: 14px; letter-spacing: .16em; text-transform: uppercase; }
+.loading-destination strong { color: #d4e9ee; font-size: 20px; font-weight: 500; }
+.loading-track { width: min(260px, 80%); height: 2px; margin-top: 24px; overflow: hidden; background: #46677844; }
+.loading-track i { display: block; width: 45%; height: 100%; background: linear-gradient(90deg, transparent, #2ee6c8, transparent); animation: loading-track-pass 1.8s ease-in-out infinite; }
+@keyframes loading-orbit-turn { to { transform: rotate(360deg); } }
+@keyframes loading-track-pass { from { transform: translateX(-110%); } to { transform: translateX(330%); } }
+@media (max-height: 500px) { .loading-emblem { width: 140px; height: 140px; margin-bottom: 12px; }.loading-emblem .neon-logo { width: 110px; height: 110px; }.loading-destination { margin-top: 24px; } }
+:root[data-motion='reduced'] .loading-screen *, :root[data-motion='reduced'] .loading-screen *::after { animation: none !important; }
+@media (prefers-reduced-motion: reduce) { .loading-screen *, .loading-screen *::after { animation: none !important; } }

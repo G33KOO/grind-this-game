@@ -3,7 +3,7 @@ import { DEFAULT_BINDINGS, type BindingAction, type Settings } from '../game/sav
 import { MenuIcon, type MenuIconId } from './GameVisuals';
 import './settings-page.css';
 
-const ACTIONS: { id: BindingAction; label: string }[] = [{ id: 'up', label: 'Haut' }, { id: 'down', label: 'Bas' }, { id: 'left', label: 'Gauche' }, { id: 'right', label: 'Droite' }, { id: 'inventory', label: 'Inventaire' }, { id: 'character', label: 'Personnage' }];
+const ACTIONS: { id: BindingAction; label: string }[] = [{ id: 'up', label: 'Haut' }, { id: 'down', label: 'Bas' }, { id: 'left', label: 'Gauche' }, { id: 'right', label: 'Droite' }, { id: 'inventory', label: 'Inventaire' }, { id: 'character', label: 'Statistiques' }];
 const TABS: { id: MenuIconId; label: string; description: string }[] = [
   { id: 'sound', label: 'Audio', description: 'Réglez le volume du jeu.' },
   { id: 'controls', label: 'Commandes', description: 'Adaptez les touches à votre façon de jouer.' },

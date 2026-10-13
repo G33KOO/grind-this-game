@@ -68,11 +68,20 @@ const GLYPHS: Record<string, ReactNode> = {
   reaper: <><path d="M8 40 L10 8 Q30 2 42 16 Q26 12 16 18 L14 40Z" fill="#cfd6dd" {...s} /><path d="M12 40 L12 8" stroke="#6b4f35" strokeWidth="4" strokeLinecap="round" /></>,
 };
 
+// Align the authored equipment silhouettes around the centre of the 48 × 48 canvas.
+const ITEM_GLYPH_OFFSETS: Record<string, readonly [number, number]> = {
+  'iron-sword': [.5, -.5], 'ember-edge': [-1, 1], 'trail-coat': [0, -1],
+  'wolf-tooth': [1.12, 1], 'thorn-ring': [0, 3.5], 'small-potion': [0, 1.5],
+  'greater-potion': [0, .5], 'mist-cloak': [0, 1], 'grave-blade': [1, 1],
+  'veteran-plate': [0, 1], 'war-banner': [-1, 0], 'night-mantle': [0, 2],
+};
+
 export function ItemIcon({ id, rarity, size = 44, className = '' }: { id: string; rarity: Rarity; size?: number; className?: string }) {
   const tone = RARITIES[rarity];
+  const offset = ITEM_GLYPH_OFFSETS[id] ?? [0, 0];
   return (
     <span className={`item-icon rarity-${rarity} ${className}`} style={{ width: size, height: size, ['--rarity' as string]: tone.color, ['--rarity-glow' as string]: tone.glow }}>
-      <svg viewBox="0 0 48 48" width={size * 0.78} height={size * 0.78} aria-hidden="true">{GLYPHS[id] ?? <circle cx="24" cy="24" r="14" fill={tone.color} {...s} />}</svg>
+      <svg viewBox="0 0 48 48" width={size * 0.78} height={size * 0.78} aria-hidden="true"><g transform={`translate(${offset[0]} ${offset[1]})`}>{GLYPHS[id] ?? <circle cx="24" cy="24" r="14" fill={tone.color} {...s} />}</g></svg>
     </span>
   );
 }
