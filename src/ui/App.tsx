@@ -60,6 +60,7 @@ export function App() {
   const gameRef = useRef<Phaser.Game | null>(null);
   const sceneRef = useRef<PlatformScene | null>(null);
   const encounterBarRef = useRef<HTMLElement | null>(null);
+  const dangerPercentRef = useRef<HTMLElement | null>(null);
   const targetRef = useRef<number | undefined>(undefined);
   const finishLock = useRef(false);
   const devItemCount = useRef(0);
@@ -203,7 +204,15 @@ export function App() {
       travel: (pending) => {
         const bar = encounterBarRef.current;
         const meter = runRef.current?.encounterMeter ?? 0;
-        if (bar) bar.style.width = `${Math.min(1, meter + pending * BALANCE.encounterMeterChancePerUnit / BALANCE.maxEncounterMeter) * 100}%`;
+        const danger = Math.min(1, (meter + pending * BALANCE.encounterMeterChancePerUnit) / BALANCE.maxEncounterMeter);
+        const percent = Math.round(danger * 100);
+        if (bar) {
+          bar.style.width = `${danger * 100}%`;
+          const gauge = bar.closest('.encounter-bar');
+          gauge?.setAttribute('aria-valuenow', String(percent));
+          gauge?.setAttribute('data-danger', danger >= .75 ? 'high' : 'normal');
+        }
+        if (dangerPercentRef.current) dangerPercentRef.current.textContent = `${percent} %`;
       },
       control: setDevice,
       isBossDefeated: (bossId) => !!runRef.current?.defeatedBosses.includes(bossId) ||
@@ -216,6 +225,7 @@ export function App() {
     const timer = window.setTimeout(() => {
       game = new Phaser.Game({
         type: Phaser.CANVAS,
+        render: { antialias: true, pixelArt: false, roundPixels: false },
         parent: 'game-canvas',
         width: 960,
         height: 620,
@@ -547,7 +557,10 @@ export function App() {
       </div>}
       {screen !== 'world' && <div className="stage-veil" />}
       <div className="world-location" aria-label="Zone actuelle"><strong>{zoneAt(run.position.x, run.position.y).name}</strong><span>Niveau {zoneAt(run.position.x, run.position.y).level}</span></div>
-      <div className="encounter-bar" role="progressbar" aria-label="Risque de rencontre"><span>Risque de rencontre</span><div className="encounter-track"><i ref={encounterBarRef} /></div></div>
+      <div className="encounter-bar" role="progressbar" aria-label="Danger" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(run.encounterMeter / BALANCE.maxEncounterMeter * 100)} data-danger={run.encounterMeter >= .75 * BALANCE.maxEncounterMeter ? 'high' : 'normal'}>
+        <div className="danger-heading"><span>Danger</span><strong ref={dangerPercentRef}>{Math.round(run.encounterMeter / BALANCE.maxEncounterMeter * 100)} %</strong></div>
+        <div className="encounter-track"><i ref={encounterBarRef} style={{ width: percentage(run.encounterMeter, BALANCE.maxEncounterMeter) }} /></div>
+      </div>
       {screen === 'world' && notice && <div className="floating-notice">{notice}<button onClick={() => setNotice('')} aria-label="Fermer">×</button></div>}
       {screen === 'world' && developmentMode && <div className={`dev-tools ${developerToolsOpen ? 'is-open' : ''}`}>
         <button className="dev-tools-toggle" aria-expanded={developerToolsOpen} onClick={() => setDeveloperToolsOpen((open) => !open)}>DEV {developerToolsOpen ? '−' : '+'}</button>

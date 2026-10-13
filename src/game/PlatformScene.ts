@@ -6,7 +6,7 @@ import { moveWithSliding, obstacleField, PLAYER_RADIUS, type ClearanceField, typ
 import { heroSvg } from '../ui/heroSvg';
 import type { HeroId } from './types';
 import {
-  BOSS_BLOCK_RADIUS, BOSS_POSITIONS, SECRET_POSITIONS, WORLD_HEIGHT, WORLD_START, WORLD_WIDTH, PATHS, ZONE_ROUTES, LANDMARKS, clearance, generateDecor, isWalkable, noise, zoneScores,
+  BOSS_BLOCK_RADIUS, BOSS_POSITIONS, SECRET_POSITIONS, WORLD_HEIGHT, WORLD_START, WORLD_WIDTH, PATHS, ZONE_ROUTES, clearance, generateDecor, isWalkable, noise, zoneScores,
   type Decor,
 } from './world';
 
@@ -43,6 +43,7 @@ export class PlatformScene extends Phaser.Scene {
   private held = new Set<string>();
   private moveKeys = { up: 'KeyW', down: 'KeyS', left: 'KeyA', right: 'KeyD' };
   private collisionField!: ClearanceField;
+  private detailLayers: { graphics: Phaser.GameObjects.Graphics; x: number; y: number }[] = [];
   private bosses: BossEntry[] = [];
   private trail!: Phaser.GameObjects.Graphics;
   private trailPoints: { x: number; y: number }[] = [];
@@ -94,9 +95,6 @@ export class PlatformScene extends Phaser.Scene {
     const rows = Math.ceil(WORLD_HEIGHT / cell);
     const ground = this.textures.createCanvas('ground', columns, rows)!;
     const context = ground.getContext();
-    if (this.textures.exists('wall-mask')) this.textures.remove('wall-mask');
-    const wallTexture = this.textures.createCanvas('wall-mask', columns, rows)!;
-    const wallContext = wallTexture.getContext();
     for (let row = 0; row < rows; row++) for (let column = 0; column < columns; column++) {
       const x = column * cell + cell / 2;
       const y = row * cell + cell / 2;
@@ -105,30 +103,20 @@ export class PlatformScene extends Phaser.Scene {
       const neon = neonOf(first.zone.id);
       const borderBlend = Math.max(0, (100 - Math.abs(second.score - first.score)) / 200);
       const outside = this.blend(BIOME_GROUND[first.zone.id], BIOME_GROUND[second.zone.id], borderBlend);
-      // Mur : plein et mat, bord anticrénelé par alpha, halo qui s'éteint vers l'intérieur de la roche
-      const coverage = Math.min(1, Math.max(0, 0.5 - depth / cell));
-      if (coverage > 0) {
-        const halo = Math.max(0, 1 - -depth / 26);
-        wallContext.fillStyle = css(this.blend(outside, neon, halo * 0.12 + noise(x / 180, y / 180) * 0.012));
-        wallContext.globalAlpha = coverage;
-        wallContext.fillRect(column, row, 1, 1);
-        wallContext.globalAlpha = 1;
-      }
-      if (depth <= 0) {
-        context.fillStyle = css(outside);
-        context.fillRect(column, row, 1, 1);
-        continue;
-      }
+      // Only broad colour gradients are rasterized; the terrain edge is vector art.
       let color = this.blend(0x05080d, neon, 0.05 + noise(x / 160, y / 160) * 0.07);
       const gap = Math.abs(second.score - first.score);
       if (gap < 7) color = this.blend(color, this.blend(neon, neonOf(second.zone.id), 0.5), (1 - gap / 7) * 0.85);
       else if (gap < 38) color = this.blend(color, neon, ((38 - gap) / 38) * 0.1);
-      if (depth < 14) color = this.blend(color, neon, ((14 - depth) / 14) * 0.35);
+      if (depth > 0 && depth < 14) color = this.blend(color, neon, ((14 - depth) / 14) * 0.35);
+      const outsideColor = this.blend(outside, neon, Math.max(0, 1-Math.abs(depth)/26)*.12);
+      const insideWeight = Phaser.Math.SmoothStep(depth, -8, 8);
+      color = this.blend(outsideColor, color, insideWeight);
       context.fillStyle = css(color);
       context.fillRect(column, row, 1, 1);
     }
     ground.refresh();
-    wallTexture.refresh();
+    ground.setFilter(Phaser.Textures.FilterMode.LINEAR);
     this.add.image(0, 0, 'ground').setOrigin(0).setDisplaySize(columns * cell, rows * cell).setDepth(0);
     const tile = this.make.graphics({ x: 0, y: 0 }, false);
     tile.lineStyle(1, 0x7fe9ff, 1).lineBetween(0.5, 0, 0.5, 64).lineBetween(0, 0.5, 64, 0.5);
@@ -136,7 +124,6 @@ export class PlatformScene extends Phaser.Scene {
     tile.generateTexture('grid', 64, 64);
     tile.destroy();
     this.add.tileSprite(0, 0, WORLD_WIDTH, WORLD_HEIGHT, 'grid').setOrigin(0).setAlpha(0.025).setDepth(0.5);
-    this.add.image(0, 0, 'wall-mask').setOrigin(0).setDisplaySize(columns * cell, rows * cell).setDepth(0.6);
   }
 
   private blend(from: number, to: number, ratio: number): number {
@@ -148,7 +135,7 @@ export class PlatformScene extends Phaser.Scene {
     drawDecorArt(graphics, decor);
   }
 
-  private contourLoops(step = 8): { x: number; y: number }[][] {
+  private contourLoops(step = 4): { x: number; y: number }[][] {
     const columns = Math.ceil(WORLD_WIDTH / step) + 1;
     const rows = Math.ceil(WORLD_HEIGHT / step) + 1;
     const values = new Float32Array(columns * rows);
@@ -223,7 +210,7 @@ export class PlatformScene extends Phaser.Scene {
   private buildWorld(): void {
     this.paintGround();
     const decor = generateDecor();
-    const graphics = this.make.graphics({ x: 0, y: 0 }, false);
+    const graphics = this.add.graphics().setDepth(1);
     // Sols construits : chemins de terre, chaussées et galeries donnent un sens au parcours.
     for(const zone of ZONES) graphics.lineStyle(zone.id==='crypt'||zone.id==='marsh'?42:32,neonOf(zone.id),.045).strokePoints(ZONE_ROUTES[zone.id],false);
     for (const path of PATHS) {
@@ -241,11 +228,21 @@ export class PlatformScene extends Phaser.Scene {
     }
     this.drawContour(graphics);
     decor.sort((a, b) => Number(!!SOLID_KINDS[a.kind]) - Number(!!SOLID_KINDS[b.kind]) || a.y - b.y);
-    for (const entry of decor) this.drawDecor(graphics, entry);
-    const layer = this.add.renderTexture(0, 0, WORLD_WIDTH, WORLD_HEIGHT).setOrigin(0).setDepth(1);
-    layer.draw(graphics);
-    graphics.destroy();
-    for(const landmark of LANDMARKS) this.add.text(landmark.position.x,landmark.position.y-100,landmark.name,{fontFamily:'sans-serif',fontSize:'11px',color:'#abc1c9',backgroundColor:'#07131abb',padding:{x:6,y:3}}).setOrigin(.5).setAlpha(.85).setDepth(2);
+    // Keep the outlines vector-based at every camera zoom. Cull off-screen chunks
+    // rather than baking the entire world into an enlarged low-resolution bitmap.
+    const chunks = new Map<string, Phaser.GameObjects.Graphics>();
+    this.detailLayers = [];
+    for (const entry of decor) {
+      const x = Math.floor(entry.x/512)*512, y = Math.floor(entry.y/512)*512;
+      const key = `${x},${y}`;
+      let detail = chunks.get(key);
+      if (!detail) {
+        detail = this.add.graphics({ x, y }).setDepth(1.1);
+        chunks.set(key, detail);
+        this.detailLayers.push({ graphics: detail, x, y });
+      }
+      this.drawDecor(detail, { ...entry, x: entry.x-x, y: entry.y-y });
+    }
     const obstacles: CircleObstacle[] = [];
     for (const entry of decor) {
       const ratio = SOLID_KINDS[entry.kind];
@@ -348,6 +345,11 @@ export class PlatformScene extends Phaser.Scene {
   }
 
   update(_time: number, delta: number): void {
+    const view = this.cameras.main.worldView;
+    for (const layer of this.detailLayers) layer.graphics.setVisible(
+      layer.x-128 < view.right && layer.x+640 > view.left &&
+      layer.y-128 < view.bottom && layer.y+640 > view.top,
+    );
     if (this.physics.world.isPaused) { this.animatePlayer(0, 0, 0, delta); return; }
     const controller = navigator.getGamepads?.().find((gamepad) => gamepad?.connected) ?? null;
     const down = (code: string, alt: string) => Number(this.held.has(code) || this.held.has(alt));

@@ -1,9 +1,9 @@
 import type { AchievementDefinition, EnemyDefinition, HeroId, ItemDefinition, PassiveDefinition, Stats } from './types';
 
 export const BALANCE = {
-  encounterCheckDistance: 96,
+  encounterCheckDistance: 64,
   encounterChancePerCheck: 0.08,
-  encounterMeterChancePerUnit: 0.00065,
+  encounterMeterChancePerUnit: 0.0013,
   maxEncounterMeter: 1,
   defenseReductionCap: 0.72,
   minDamage: 1,

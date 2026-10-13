@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ENEMIES, validateContent } from './content';
+import { BALANCE, ENEMIES, validateContent } from './content';
 import {
   addAchievements, advanceEncounter, allocatePoints, canDrop, decodeRun, deriveStats,
   damageAfterDefense, equipItem, gainExperience, initialProfile, newRun, respecStats, rollLoot,
@@ -148,6 +148,20 @@ describe('content and core rules', () => {
     expect(divided.run.rngState).toBe(whole.run.rngState);
     expect(divided.run.encounterMeter).toBeCloseTo(whole.run.encounterMeter);
     expect(divided.run.distanceSinceEncounterCheck).toBeCloseTo(whole.run.distanceSinceEncounterCheck);
+  });
+
+  it('fills danger twice as fast and guarantees an encounter within the shorter walking distance', () => {
+    const profile = initialProfile();
+    const start = newRun('warrior', 42);
+    const firstSteps = advanceEncounter(start, 32, profile);
+    expect(firstSteps.triggered).toBe(false);
+    expect(firstSteps.run.encounterMeter).toBeCloseTo(32 * .0013);
+    expect(advanceEncounter(start, 0, profile).run.encounterMeter).toBe(0);
+    for (let seed = 1; seed <= 100; seed++) {
+      const result = advanceEncounter(newRun('warrior', seed), Math.ceil(1 / BALANCE.encounterMeterChancePerUnit / BALANCE.encounterCheckDistance) * BALANCE.encounterCheckDistance, profile);
+      expect(result.triggered).toBe(true);
+      expect(result.run.encounterMeter).toBe(0);
+    }
   });
 
   it('is deterministic for identical seeds and migrates the supported old save shape', () => {
