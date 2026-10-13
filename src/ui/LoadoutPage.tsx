@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { HEROES, ITEMS, PASSIVES, STARTING_OPTIONS, masteryRank, type StartOption } from '../game/content';
-import { isStartOptionUnlocked, type Loadout } from '../game/engine';
+import { isStartOptionUnlocked, resolveLoadout, type Loadout } from '../game/engine';
 import type { HeroId, Profile } from '../game/types';
 import { HERO_ACCENT, ItemIcon, RARITIES, passiveRarity, type Rarity } from './icons';
 import { HeroPortrait } from './GameVisuals';
@@ -37,16 +37,16 @@ function OptionGroup({ title, options, describe, selected, onSelect, profile, he
     <div className="starting-description" aria-live="polite" style={{ ['--rarity' as string]: RARITIES[view.rarity].color }}><strong>{view.name}</strong><small>{RARITIES[view.rarity].label}{` · maîtrise ${option.masteryRequired}`}</small><p>{view.description}</p><span>{unlocked ? focused === selected ? 'Sélectionné' : 'Disponible' : `Maîtrise ${option.masteryRequired} requise`}</span></div>
   </section>;
 }
-export function LoadoutPage({ hero, profile, onStart, onBack }: { hero: HeroId; profile: Profile; onStart(loadout: Required<Loadout>): void; onBack(): void }) {
+export function LoadoutPage({ hero, profile, onStart, onBack, onChange }: { hero: HeroId; profile: Profile; onStart(loadout: Required<Loadout>): void; onBack(): void; onChange(loadout: Required<Loadout>): void }) {
   const options = STARTING_OPTIONS[hero];
-  const [weapon, setWeapon] = useState(options.weapons[0].id);
-  const [passive, setPassive] = useState(options.passives[0].id);
+  const [weapon, setWeapon] = useState(() => resolveLoadout(hero, profile).weapon);
+  const [passive, setPassive] = useState(() => resolveLoadout(hero, profile).passive);
   return <main className="shell title-screen classes-page starting-screen" style={{ ['--accent' as string]: HERO_ACCENT[hero] }}>
     <SpaceBackdrop /><h1>Équipement de départ</h1>
     <div className="starting-board">
-      <OptionGroup title="Arme" options={options.weapons} describe={describeWeapon} selected={weapon} onSelect={setWeapon} profile={profile} hero={hero} />
+      <OptionGroup title="Arme" options={options.weapons} describe={describeWeapon} selected={weapon} onSelect={(id) => { setWeapon(id); onChange({ weapon: id, passive }); }} profile={profile} hero={hero} />
       <section className="starting-hero" aria-label={HEROES[hero].name}><h2>{HEROES[hero].name}</h2><span className="starting-mastery">Maîtrise {masteryRank(profile.mastery[hero])}</span><div className="starting-portrait"><HeroPortrait hero={hero} /></div><div className="starting-equipped" aria-label="Équipement sélectionné"><ItemIcon id={weapon} rarity={describeWeapon(weapon).rarity} size={40} /><ItemIcon id={passive} rarity={describePassive(passive).rarity} size={40} /></div></section>
-      <OptionGroup title="Passif" options={options.passives} describe={describePassive} selected={passive} onSelect={setPassive} profile={profile} hero={hero} />
+      <OptionGroup title="Passif" options={options.passives} describe={describePassive} selected={passive} onSelect={(id) => { setPassive(id); onChange({ weapon, passive: id }); }} profile={profile} hero={hero} />
     </div>
     <footer className="starting-actions"><button className="primary" onClick={() => onStart({ weapon, passive })}>Commencer la partie</button><button onClick={onBack}>Retour au choix de classe</button></footer>
   </main>;

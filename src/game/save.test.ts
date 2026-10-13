@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { newRun } from './engine';
-import { loadProfile, loadRun, saveRun } from './save';
+import { initialProfile, newRun, rememberLoadout, resolveLoadout } from './engine';
+import { masteryLevelsForRank } from './content';
+import { loadProfile, loadRun, saveProfile, saveRun } from './save';
 
 class MemoryStorage {
   private values = new Map<string, string>();
@@ -66,5 +67,53 @@ describe('versioned local run saves', () => {
     installBrowserStubs();
     storage.setItem('grind-this-game.profile', '{"version":1,"achievements":[]}');
     expect(() => loadProfile()).toThrow(/profil permanent/);
+  });
+
+  it('remembers independent loadouts across reloads and clearing a run', async () => {
+    installBrowserStubs();
+    const profile = { ...initialProfile(), mastery: { warrior: masteryLevelsForRank(4), assassin: masteryLevelsForRank(4) } };
+    const warrior = { weapon: 'ember-edge', passive: 'battle-heart' };
+    const assassin = { weapon: 'duelist-blade', passive: 'bloodletting' };
+    saveProfile(rememberLoadout(rememberLoadout(profile, 'warrior', warrior), 'assassin', assassin));
+    await saveRun(newRun('warrior', 42, warrior));
+    await saveRun(null);
+    expect(resolveLoadout('warrior', loadProfile())).toEqual(warrior);
+    expect(resolveLoadout('assassin', loadProfile())).toEqual(assassin);
+    const restarted = newRun('assassin', 43, resolveLoadout('assassin', loadProfile()));
+    expect(restarted.inventory[0].itemId).toBe(assassin.weapon);
+    expect(restarted.passives[0].id).toBe(assassin.passive);
+  });
+
+  it('updates a saved choice without changing the other class or profile progress', () => {
+    installBrowserStubs();
+    const profile = { ...initialProfile(), mastery: { warrior: 0, assassin: masteryLevelsForRank(4) }, achievements: ['meadow-slain'] };
+    const first = rememberLoadout(profile, 'assassin', { weapon: 'duelist-blade', passive: 'bloodletting' });
+    saveProfile(rememberLoadout(first, 'assassin', { weapon: 'duelist-blade', passive: 'venom' }));
+    const loaded = loadProfile();
+    expect(resolveLoadout('assassin', loaded)).toEqual({ weapon: 'duelist-blade', passive: 'venom' });
+    expect(loaded.mastery).toEqual(profile.mastery);
+    expect(loaded.achievements).toEqual(profile.achievements);
+    expect(resolveLoadout('warrior', loaded)).toEqual(resolveLoadout('warrior', profile));
+  });
+
+  it('loads old profiles with the class defaults', () => {
+    installBrowserStubs();
+    saveProfile(initialProfile());
+    const loaded = loadProfile();
+    for (const hero of ['warrior', 'assassin'] as const) {
+      expect(resolveLoadout(hero, loaded)).toEqual(resolveLoadout(hero, initialProfile(), {}));
+    }
+  });
+
+  it('discards invalid or locked selections without losing a valid selection', () => {
+    installBrowserStubs();
+    const profile = { ...initialProfile(), mastery: { warrior: 0, assassin: masteryLevelsForRank(4) } };
+    storage.setItem('grind-this-game.profile', JSON.stringify({ ...profile, startingLoadouts: {
+      warrior: { weapon: 'grave-blade', passive: 'unknown' },
+      assassin: { weapon: 123, passive: 'bloodletting' },
+    } }));
+    const loaded = loadProfile();
+    expect(resolveLoadout('warrior', loaded)).toEqual(resolveLoadout('warrior', profile, {}));
+    expect(resolveLoadout('assassin', loaded)).toEqual({ weapon: 'duelist-blade', passive: 'bloodletting' });
   });
 });

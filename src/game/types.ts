@@ -95,6 +95,7 @@ export interface ItemInstance {
 
 export interface RunState {
   version: 2;
+  worldVersion?: number;
   developerMode: boolean;
   hero: HeroId;
   level: number;
@@ -103,6 +104,8 @@ export interface RunState {
   unspentPoints: number;
   invested: Partial<Stats>;
   hp: number;
+  /** Fraction de vol de vie reportée sur le prochain combat. */
+  lifestealRemainder?: number;
   position: { x: number; y: number };
   encounterMeter: number;
   distanceSinceEncounterCheck: number;
@@ -125,6 +128,7 @@ export interface RunState {
 
 export interface Profile {
   version: 1;
+  startingLoadouts?: Partial<Record<HeroId, { weapon: string; passive: string }>>;
   mastery: Record<HeroId, number>;
   achievements: string[];
   unlockedItems: string[];
@@ -137,6 +141,8 @@ export interface CombatState {
   playerMaxHp: number;
   playerStats: Stats;
   playerEffects: Effect[];
+  /** Fraction de soin conservée entre les attaques et les combats. */
+  lifestealRemainder?: number;
   shield: number;
   enemies: EnemyUnit[];
   time: number;

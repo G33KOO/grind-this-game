@@ -23,7 +23,24 @@ const Eyes = ({ x, y, gap, size = 7, color = '#fff', pupil = INK }: { x: number;
   </>
 );
 
-export function EnemyArt({ id, color }: { id: string; color: number }) {
+/** The neon treatment travels with the art, including standalone Phaser SVGs. */
+function NeonArt({ color, children }: { color: number; children: ReactNode }) {
+  return <g className="neon-character-art" style={{ color: neonFor(color), filter: 'drop-shadow(0 0 2px currentColor) drop-shadow(0 0 5px currentColor)' }}>
+    <style>{`
+      .neon-character-art.neon-character-art :is(path,rect,circle,ellipse,line,polygon,polyline) {
+        stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round;
+      }
+      .neon-character-art.neon-character-art [fill]:not([fill="none"]) { fill: currentColor; fill-opacity: .07; }
+    `}</style>
+    {children}
+  </g>;
+}
+
+export function EnemyArt(props: { id: string; color: number }) {
+  return <NeonArt color={props.color}><EnemyDrawing {...props} /></NeonArt>;
+}
+
+function EnemyDrawing({ id, color }: { id: string; color: number }) {
   const base = hex(color);
   const dark = shade(color, 0.65);
   const light = shade(color, 1.25);
@@ -243,7 +260,11 @@ export function EnemyArt({ id, color }: { id: string; color: number }) {
   }
 }
 
-export function HeroArt({ hero, color }: { hero: HeroId; color: number }) {
+export function HeroArt(props: { hero: HeroId; color: number }) {
+  return <NeonArt color={props.color}><HeroDrawing {...props} /></NeonArt>;
+}
+
+function HeroDrawing({ hero, color }: { hero: HeroId; color: number }) {
   const base = hex(color);
   const dark = shade(color, 0.6);
   if (hero === 'warrior') {
@@ -308,7 +329,7 @@ function useHits(hp: number): Hit[] {
   useEffect(() => {
     const lost = previous.current - hp;
     previous.current = hp;
-    if (lost <= 0) return;
+    if (lost === 0) return;
     const id = ++counter.current;
     setHits((current) => [...current.slice(-2), { id, amount: lost }]);
     const timer = window.setTimeout(() => setHits((current) => current.filter((hit) => hit.id !== id)), 900);
@@ -332,7 +353,7 @@ function Fighter({ name, hp, maxHp, extra, className, onClick, targeted, childre
         <svg viewBox="0 0 200 200" aria-hidden="true">
           {children}
         </svg>
-        {hits.map((hit) => <span className="damage-number" key={hit.id}>-{hit.amount}</span>)}
+        {hits.map((hit) => <span className={`damage-number${hit.amount < 0 ? ' healing-number' : ''}`} key={hit.id}>{hit.amount < 0 ? `+${-hit.amount}` : `-${hit.amount}`}</span>)}
       </div>
       <div className="fighter-hp"><i style={{ width: `${ratio * 100}%` }} /></div>
       <div className="fighter-name">{name}<small>{Math.max(0, hp)}/{maxHp}{extra}</small></div>

@@ -1,5 +1,5 @@
 import { ACHIEVEMENTS, BALANCE, ENEMIES, HEROES, ITEMS, PASSIVES, STARTING_OPTIONS, ZONES, masteryRank, type StartOption } from './content';
-import { WORLD_START } from './world';
+import { WORLD_START, WORLD_VERSION, ZONE_ENTRIES } from './world';
 import type { AchievementDefinition, CombatState, Effect, HeroId, ItemDefinition, ItemInstance, Profile, RunState, Slot, Stats } from './types';
 
 export const clamp = (value: number, min: number, max: number): number =>
@@ -25,7 +25,7 @@ export function isStartOptionUnlocked(option: StartOption, profile: Profile, her
 }
 
 /** Retourne le choix demandé s'il est proposé et débloqué, sinon le choix de base de la classe. */
-export function resolveLoadout(hero: HeroId, profile: Profile, loadout: Loadout = {}): Required<Loadout> {
+export function resolveLoadout(hero: HeroId, profile: Profile, loadout: Loadout = profile.startingLoadouts?.[hero] ?? {}): Required<Loadout> {
   const pick = (options: StartOption[], wanted?: string) => {
     const found = options.find((option) => option.id === wanted);
     return found && isStartOptionUnlocked(found, profile, hero) ? found.id : options[0].id;
@@ -33,10 +33,14 @@ export function resolveLoadout(hero: HeroId, profile: Profile, loadout: Loadout 
   return { weapon: pick(STARTING_OPTIONS[hero].weapons, loadout.weapon), passive: pick(STARTING_OPTIONS[hero].passives, loadout.passive) };
 }
 
+export function rememberLoadout(profile: Profile, hero: HeroId, loadout: Loadout): Profile {
+  return { ...profile, startingLoadouts: { ...profile.startingLoadouts, [hero]: resolveLoadout(hero, profile, loadout) } };
+}
+
 export function newRun(hero: HeroId, seed = 0x71a9c3, loadout?: Required<Loadout>): RunState {
   const start = HEROES[hero];
   const run: RunState = {
-    version: 2, developerMode: false, hero, level: 1, xp: 0, xpToNext: 60, unspentPoints: 0, invested: {},
+    version: 2, worldVersion: WORLD_VERSION, developerMode: false, hero, level: 1, xp: 0, xpToNext: 60, unspentPoints: 0, invested: {},
     hp: start.stats.maxHp, position: { ...WORLD_START }, encounterMeter: 0, distanceSinceEncounterCheck: 0, rngState: seed >>> 0 || 1,
     inventory: [
       { instanceId: 'starter-weapon', itemId: loadout?.weapon ?? start.startingItem },
@@ -262,7 +266,7 @@ export function startCombat(run: RunState, enemyIds: string[]): CombatState {
   const effects = activeEffects(run);
   const shield = effects.filter((effect) => effect.kind === 'shield').reduce((sum, effect) => sum + effect.amount, 0);
   return {
-    playerHp: run.hp, playerMaxHp: stats.maxHp, playerStats: stats, playerEffects: effects, shield,
+    playerHp: run.hp, playerMaxHp: stats.maxHp, playerStats: stats, playerEffects: effects, lifestealRemainder: clamp(run.lifestealRemainder ?? 0, 0, 1 - Number.EPSILON), shield,
     enemies, time: 0, playerNextAction: BALANCE.baseActionTime / stats.speed,
     targetIndex: 0, log: ['Le combat commence.'], rngState: run.rngState, over: 'none',
   };
@@ -277,6 +281,7 @@ export function stepCombat(state: CombatState, preferredTarget?: number): Combat
   if (!living.length) return { ...state, enemies, over: 'win' };
   let log = state.log;
   let playerHp = state.playerHp;
+  let lifestealRemainder = clamp(state.lifestealRemainder ?? 0, 0, 1 - Number.EPSILON);
   let shield = state.shield;
   let rngState = state.rngState;
   let playerNextAction = state.playerNextAction;
@@ -297,6 +302,7 @@ export function stepCombat(state: CombatState, preferredTarget?: number): Combat
     const critical = random.value < state.playerStats.critChance;
     const base = state.playerStats.strength + offenseBonus;
     const damage = Math.max(1, Math.round(base * (critical ? state.playerStats.critDamage : 1) * (1 + lowBonus)));
+    let dealtDamage = Math.min(target.enemy.currentHp, damage);
     target.enemy.currentHp = Math.max(0, target.enemy.currentHp - damage);
     log = pushLog(log, `Vous infligez ${damage}${critical ? ' critique' : ''} à ${target.enemy.name}.`);
     const chain = state.playerEffects.slice(0, BALANCE.extraEffectChainLimit);
@@ -305,22 +311,35 @@ export function stepCombat(state: CombatState, preferredTarget?: number): Combat
     }
     const lifesteal = chain.filter((effect) => effect.kind === 'lifesteal')
       .reduce((sum, effect) => sum + effect.ratio, 0);
-    if (lifesteal > 0) playerHp = Math.min(state.playerMaxHp, playerHp + Math.floor(damage * lifesteal));
     for (const effect of chain) {
       if (target.enemy.currentHp > 0 && effect.kind === 'poison') {
           target.enemy.poisonDamage = Math.min(50, target.enemy.poisonDamage + effect.damage);
           target.enemy.poisonTurns = Math.min(BALANCE.poisonMaxTurns, Math.max(target.enemy.poisonTurns, effect.turns));
       }
       if (effect.kind === 'extraStrike' && target.enemy.currentHp > 0) {
-        target.enemy.currentHp = Math.max(0, target.enemy.currentHp - Math.max(1, Math.round(base * effect.ratio)));
+        const extraDamage = Math.max(1, Math.round(base * effect.ratio));
+        dealtDamage += Math.min(target.enemy.currentHp, extraDamage);
+        target.enemy.currentHp = Math.max(0, target.enemy.currentHp - extraDamage);
         log = pushLog(log, `Frappe supplémentaire : ${target.enemy.name} subit des dégâts.`);
       }
       if (effect.kind === 'cleave') for (const other of living) {
         if (other.index !== target.index && other.enemy.currentHp > 0) {
-          other.enemy.currentHp = Math.max(0, other.enemy.currentHp - Math.max(1, Math.round(damage * effect.ratio)));
+          const cleaveDamage = Math.max(1, Math.round(damage * effect.ratio));
+          dealtDamage += Math.min(other.enemy.currentHp, cleaveDamage);
+          other.enemy.currentHp = Math.max(0, other.enemy.currentHp - cleaveDamage);
           log = pushLog(log, `Dégâts de zone : ${other.enemy.name} est touché.`);
         }
       }
+    }
+    if (lifesteal > 0 && playerHp < state.playerMaxHp) {
+      const healing = dealtDamage * lifesteal + lifestealRemainder;
+      const whole = Math.floor(healing + 1e-9);
+      const restored = Math.min(state.playerMaxHp - playerHp, whole);
+      playerHp += restored;
+      lifestealRemainder = playerHp >= state.playerMaxHp ? 0 : Math.max(0, healing - whole);
+      if (restored > 0) log = pushLog(log, `Vol de vie : +${restored} PV.`);
+    } else {
+      lifestealRemainder = 0;
     }
     playerNextAction += BALANCE.baseActionTime / state.playerStats.speed;
   } else {
@@ -346,7 +365,7 @@ export function stepCombat(state: CombatState, preferredTarget?: number): Combat
   if (over === 'win') log = pushLog(log, 'Victoire !');
   if (over === 'loss') log = pushLog(log, 'Vous êtes tombé au combat.');
   return {
-    ...state, enemies, playerHp, shield, time, playerNextAction, log, rngState,
+    ...state, enemies, playerHp, lifestealRemainder, shield, time, playerNextAction, log, rngState,
     targetIndex: living.some(({ index }) => index === (preferredTarget ?? state.targetIndex)) ? (preferredTarget ?? state.targetIndex) : living[0].index,
     over,
   };
@@ -407,7 +426,8 @@ export function validateRun(value: unknown): RunState {
       !Number.isFinite(run.xp) || !Number.isFinite(run.xpToNext) || run.xp < 0 || run.xpToNext <= 0) {
     throw new Error('La sauvegarde contient des statistiques de progression invalides.');
   }
-  return { ...run, pendingPassivePicks: 0 } as RunState;
+  const currentZone = ZONES.find((zone) => !run.defeatedBosses?.includes(zone.boss)) ?? ZONES[ZONES.length - 1];
+  return { ...run, pendingPassivePicks: 0, worldVersion: WORLD_VERSION, position: run.worldVersion === WORLD_VERSION ? run.position : { ...ZONE_ENTRIES[currentZone.id] } } as RunState;
 }
 
 export function decodeRun(raw: string): RunState {

@@ -3,7 +3,7 @@ import Phaser from 'phaser';
 import { ACHIEVEMENTS, BALANCE, ENEMIES, HEROES, ITEMS, PASSIVES, ZONES, masteryLevelsForRank, masteryRank, MASTERY_MAX_RANK, STARTING_OPTIONS } from '../game/content';
 import {
   addAchievements, advanceEncounter, allocatePoints, applyProgress, deriveStats,
-  gainExperience, initialProfile, newRun, resolveLoadout, rollEncounter,
+  gainExperience, initialProfile, newRun, rememberLoadout, resolveLoadout, rollEncounter,
   respecStats, rollLoot, startCombat, stepCombat,
 } from '../game/engine';
 import type { Loadout } from '../game/engine';
@@ -11,7 +11,7 @@ import { DEFAULT_SETTINGS, loadProfile, loadRun, loadSettings, saveProfile, save
 import { SettingsPage } from './SettingsPage';
 import { NeonLogo } from './NeonLogo';
 import { HERO_NEON, PlatformScene, type MapCallbacks, type MapEvent } from '../game/PlatformScene';
-import { ZONE_SHAPES, zoneAt } from '../game/world';
+import { ZONE_ENTRIES, zoneAt } from '../game/world';
 import { BattleScene } from './BattleScene';
 import { CombatRecap, type CombatRecapData } from './CombatRecap';
 import { HERO_ACCENT, ItemIcon, RARITIES, passiveRarity } from './icons';
@@ -24,6 +24,8 @@ import { BestiaryPage } from './BestiaryPage';
 import { SpaceBackdrop } from './SpaceBackdrop';
 import { HeroPortrait, HeroIdentity, MenuIcon, MenuFooter, StatIcon } from './GameVisuals';
 
+
+import './game-hud.css';
 
 import type { CombatState, HeroId, Profile, RunState } from '../game/types';
 
@@ -48,7 +50,7 @@ export function App() {
   const combatRef = useRef<CombatState | null>(null);
   const [settings, setSettings] = useState<Settings>(() => loadSettings());
   const [error, setError] = useState('');
-  const [device, setDevice] = useState<'keyboard' | 'gamepad'>('keyboard');
+  const [, setDevice] = useState<'keyboard' | 'gamepad'>('keyboard');
   const [developmentMode, setDevelopmentMode] = useState(false);
   const [developerToolsOpen, setDeveloperToolsOpen] = useState(false);
   const [devItem, setDevItem] = useState(ITEMS[0].id);
@@ -125,6 +127,7 @@ export function App() {
   useEffect(() => {
     const root = document.documentElement;
     root.dataset.glow = settings.glow;
+    sceneRef.current?.setReduceMotion(settings.reduceMotion);
     root.dataset.motion = settings.reduceMotion ? 'reduced' : 'full';
     root.dataset.contrast = settings.highContrast ? 'high' : 'normal';
     root.style.setProperty('--ui-scale', String(settings.uiScale));
@@ -194,6 +197,7 @@ export function App() {
         sceneRef.current = scene;
         const { up, down, left, right } = settingsRef.current.bindings;
         scene.setMoveKeys({ up, down, left, right });
+        scene.setReduceMotion(settingsRef.current.reduceMotion);
         window.requestAnimationFrame(() => setWorldReady(true));
       },
       travel: (pending) => {
@@ -205,7 +209,7 @@ export function App() {
       isBossDefeated: (bossId) => !!runRef.current?.defeatedBosses.includes(bossId) ||
         (bossId === 'crypt-boss' && profileRef.current.paths.includes('ashen-path')),
     };
-    const worldScene = new PlatformScene(callbacks, run.position, HERO_NEON[run.hero] ?? HEROES[run.hero].color);
+    const worldScene = new PlatformScene(callbacks, run.position, HERO_NEON[run.hero] ?? HEROES[run.hero].color, run.hero);
     let game: Phaser.Game | null = null;
     setWorldReady(false);
     // Laisse l'écran de chargement s'afficher avant la construction (synchrone) du monde
@@ -265,7 +269,7 @@ export function App() {
     if (!current) return;
     const defeated = result.enemies.filter((enemy) => enemy.currentHp <= 0);
     let updated: RunState = {
-      ...current, hp: result.playerHp, pendingCombat: null, kills: current.kills + defeated.length,
+      ...current, hp: result.playerHp, lifestealRemainder: result.lifestealRemainder ?? 0, pendingCombat: null, kills: current.kills + defeated.length,
       victories: current.victories + (result.over === 'win' ? 1 : 0),
       rngState: result.rngState,
     };
@@ -427,6 +431,8 @@ export function App() {
   };
 
   const stats = useMemo(() => run ? deriveStats(run) : null, [run]);
+  const hudHp = combat?.playerHp ?? run?.hp ?? 0;
+  const hudMaxHp = combat?.playerMaxHp ?? stats?.maxHp ?? 0;
   const persistRun = (updated: RunState) => {
     syncRun(updated);
     void saveRun(updated).catch((saveError: unknown) => setError(saveError instanceof Error ? saveError.message : 'Échec de sauvegarde.'));
@@ -448,7 +454,7 @@ export function App() {
   };
 
   if ((!run || screen === 'title') && loadoutHero) {
-    return <LoadoutPage hero={loadoutHero} profile={profile} onStart={(loadout) => startGame(loadoutHero, loadout)} onBack={() => setLoadoutHero(null)} />;
+    return <LoadoutPage key={loadoutHero} hero={loadoutHero} profile={profile} onChange={(loadout) => updateProfile(rememberLoadout(profileRef.current, loadoutHero, loadout))} onStart={(loadout) => startGame(loadoutHero, loadout)} onBack={() => setLoadoutHero(null)} />;
   }
 
   if ((!run || screen === 'title') && heroDetail) {
@@ -510,28 +516,25 @@ export function App() {
   }
 
   return <main className="shell game-shell">
-    <header className="topbar">
-      <div className="hud-player">
-        <button className="wordmark" aria-label="Retour au menu" data-tip="Retour au menu principal" disabled={screen === 'combat'} onClick={() => setScreen('title')}><NeonLogo size={30} /></button>
-        <div className="hud-details">
-          <div className="hud-identity" data-tip="Votre classe et votre niveau"><HeroPortrait hero={run.hero} className="hud-portrait" /><strong>{HEROES[run.hero].name}</strong><span>NIV. {run.level}</span></div>
-          <div className="hud-vitals">
-            <div className="hud-meter" data-tip="Points de vie : à 0, la partie est perdue" aria-label={`Vie : ${run.hp} sur ${stats?.maxHp ?? 0}`}>
-              <span>PV</span><div className="meter hp"><i style={{ width: percentage(run.hp, stats?.maxHp ?? 1) }} /></div><small>{run.hp}</small>
-            </div>
-            <div className="hud-meter" data-tip="Expérience : remplissez la jauge pour gagner un niveau" aria-label={`Expérience : ${run.xp} sur ${run.xpToNext}`}>
-              <span>XP</span><div className="meter xp"><i style={{ width: percentage(run.xp, run.xpToNext) }} /></div><small>{run.xp}/{run.xpToNext}</small>
-            </div>
-          </div>
+    <header className="game-hud" style={{ ['--accent' as string]: HERO_ACCENT[run.hero] }}>
+      <section className="hud-status" aria-label="État du personnage">
+        <div className="hud-class-emblem"><HeroPortrait hero={run.hero} /><span>{run.level}</span></div>
+        <div className="hud-life-panel"><div className="hud-life-heading"><strong>{HEROES[run.hero].name}</strong><span>{hudHp}<small> / {hudMaxHp}</small></span></div>
+          <div className={hudHp / Math.max(1, hudMaxHp) < .3 ? 'hud-life-track is-low' : 'hud-life-track'} role="progressbar" aria-label="Points de vie" aria-valuemin={0} aria-valuemax={hudMaxHp} aria-valuenow={hudHp}><i style={{ width: percentage(hudHp, hudMaxHp) }} /></div>
+          <div className="hud-xp-line"><span>XP</span><div className="hud-xp-track" role="progressbar" aria-label="Expérience" aria-valuemin={0} aria-valuemax={run.xpToNext} aria-valuenow={run.xp}><i style={{ width: percentage(run.xp, run.xpToNext) }} /></div><small>{run.xp}/{run.xpToNext}</small></div>
         </div>
-      </div>
-      <nav aria-label="Menu du jeu">
-        <button aria-label="Zones et butins" data-tip="Zones, monstres et probabilités de butin (L)" disabled={screen === 'combat'} onClick={() => setScreen('loot')}><MenuIcon id="loot" /><kbd>L</kbd></button>
-        <button aria-label="Inventaire" data-tip="Inventaire et équipement (I)" disabled={screen === 'combat'} onClick={openInventory}><MenuIcon id="inventory" /><kbd>I</kbd></button>
-        <button className={run.unspentPoints > 0 ? 'has-alert' : ''} aria-label={run.unspentPoints > 0 ? `Personnage : ${run.unspentPoints} point(s) à répartir` : 'Personnage'} data-tip="Statistiques, maîtrise et passif de départ (C)" disabled={screen === 'combat'} onClick={() => { setScreen('stats'); sceneRef.current?.togglePause(true); }}><MenuIcon id="character" /><kbd>C</kbd>{run.unspentPoints > 0 && <b className="alert-badge" aria-hidden="true">{run.unspentPoints}</b>}</button>
-        <button aria-label="Succès" data-tip="Succès débloqués et à débloquer" disabled={screen === 'combat'} onClick={() => { setScreen('achievements'); sceneRef.current?.togglePause(true); }}><MenuIcon id="achievements" /></button>
-        <button aria-label="Options" data-tip="Paramètres : volume, vitesse, plein écran" disabled={screen === 'combat'} onClick={() => setScreen('settings')}><MenuIcon id="settings" /></button>
-        <button aria-label={`Vitesse du jeu ×${settings.combatSpeed}`} data-tip={`Vitesse du combat : ×${settings.combatSpeed} (cliquer pour passer à ×${settings.combatSpeed === 1 ? 2 : settings.combatSpeed === 2 ? 4 : 1})`} onClick={() => setSettings({ ...settings, combatSpeed: settings.combatSpeed === 1 ? 2 : settings.combatSpeed === 2 ? 4 : 1 })}><span aria-hidden="true">×{settings.combatSpeed}</span></button>
+        <button className="hud-build-seal" aria-label={`Passif de départ : ${PASSIVES.find((entry) => entry.id === run.passives[0]?.id)?.name ?? 'Aucun'}`} data-tip={PASSIVES.find((entry) => entry.id === run.passives[0]?.id)?.description} disabled={screen === 'combat'} onClick={() => { setScreen('stats'); sceneRef.current?.togglePause(true); }}>{run.passives[0] && <ItemIcon id={run.passives[0].id} rarity={passiveRarity(PASSIVES.find((entry) => entry.id === run.passives[0].id)?.weight ?? 5)} size={36} />}</button>
+      </section>
+      <nav className="hud-utilities" aria-label="Options du jeu">
+        <button aria-label="Succès" data-tip="Succès" disabled={screen === 'combat'} onClick={() => { setScreen('achievements'); sceneRef.current?.togglePause(true); }}><MenuIcon id="achievements" size={22} /></button>
+        <button aria-label="Options" data-tip="Paramètres" disabled={screen === 'combat'} onClick={() => setScreen('settings')}><MenuIcon id="settings" size={22} /></button>
+        <button aria-label={`Vitesse du jeu ×${settings.combatSpeed}`} data-tip="Vitesse des combats" onClick={() => setSettings({ ...settings, combatSpeed: settings.combatSpeed === 1 ? 2 : settings.combatSpeed === 2 ? 4 : 1 })}><span>×{settings.combatSpeed}</span></button>
+        <button aria-label="Retour au menu" data-tip="Menu principal" disabled={screen === 'combat'} onClick={() => setScreen('title')}><NeonLogo size={26} /></button>
+      </nav>
+      <nav className="hud-actions" aria-label="Menu du jeu">
+        <button aria-label="Zones et butins" disabled={screen === 'combat'} onClick={() => setScreen('loot')}><MenuIcon id="loot" size={26} /><span>Butin</span><kbd>L</kbd></button>
+        <button aria-label="Inventaire" disabled={screen === 'combat'} onClick={openInventory}><MenuIcon id="inventory" size={26} /><span>Sac</span><kbd>I</kbd></button>
+        <button className={run.unspentPoints > 0 ? 'has-alert' : ''} aria-label={run.unspentPoints > 0 ? `Personnage : ${run.unspentPoints} points à répartir` : 'Personnage'} disabled={screen === 'combat'} onClick={() => { setScreen('stats'); sceneRef.current?.togglePause(true); }}><MenuIcon id="character" size={26} /><span>Build</span><kbd>C</kbd>{run.unspentPoints > 0 && <b className="alert-badge">{run.unspentPoints}</b>}</button>
       </nav>
     </header>
     <section className={`stage ${screen === 'summary' ? 'stage-hidden' : ''}`} aria-label="Carte du monde">
@@ -543,16 +546,14 @@ export function App() {
         <div className="loading-bar" aria-hidden="true"><i /></div>
       </div>}
       {screen !== 'world' && <div className="stage-veil" />}
-      <div className="world-location" aria-label="Zone actuelle">{zoneAt(run.position.x, run.position.y).name} · NIV. {zoneAt(run.position.x, run.position.y).level}</div>
-      <div className="encounter-bar" role="progressbar" aria-label="Danger de rencontre"><span>DANGER</span><div className="encounter-track"><i ref={encounterBarRef} /></div></div>
+      <div className="world-location" aria-label="Zone actuelle"><strong>{zoneAt(run.position.x, run.position.y).name}</strong><span>Niveau {zoneAt(run.position.x, run.position.y).level}</span></div>
+      <div className="encounter-bar" role="progressbar" aria-label="Risque de rencontre"><span>Risque de rencontre</span><div className="encounter-track"><i ref={encounterBarRef} /></div></div>
       {screen === 'world' && notice && <div className="floating-notice">{notice}<button onClick={() => setNotice('')} aria-label="Fermer">×</button></div>}
-      {screen === 'world' && <div className="map-legend"><span>{device === 'gamepad' ? 'Manette détectée' : 'WASD · ZQSD · Flèches'}</span><span>Vitesse : bouton ×1/×2/×4</span></div>}
       {screen === 'world' && developmentMode && <div className={`dev-tools ${developerToolsOpen ? 'is-open' : ''}`}>
         <button className="dev-tools-toggle" aria-expanded={developerToolsOpen} onClick={() => setDeveloperToolsOpen((open) => !open)}>DEV {developerToolsOpen ? '−' : '+'}</button>
         {developerToolsOpen && <>
           <div>{ZONES.map((zone) => <button key={zone.id} onClick={() => {
-            const shape = ZONE_SHAPES[zone.id];
-            const position = { x: shape.x + 90, y: shape.y + 40 };
+            const position = { ...ZONE_ENTRIES[zone.id] };
             persistRun({ ...run, position });
             sceneRef.current?.teleport(position.x, position.y);
           }}>Aller : {zone.name}</button>)}</div>

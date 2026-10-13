@@ -1,4 +1,4 @@
-import { decodeRun, initialProfile, validateRun } from './engine';
+import { decodeRun, initialProfile, resolveLoadout, validateRun } from './engine';
 import type { Profile, RunState } from './types';
 
 const RUN_KEY = 'grind-this-game.run';
@@ -94,7 +94,16 @@ export function loadProfile(): Profile {
         !('assassin' in parsed.mastery) || typeof parsed.mastery.assassin !== 'number' || !Number.isFinite(parsed.mastery.assassin) || parsed.mastery.assassin < 0) {
       throw new Error('Profil invalide.');
     }
-    return parsed as Profile;
+    const profile = parsed as Profile;
+    const saved = profile.startingLoadouts;
+    const choice = (hero: 'warrior' | 'assassin') => {
+      const entry = saved && typeof saved === 'object' ? saved[hero] : undefined;
+      return resolveLoadout(hero, profile, entry && typeof entry === 'object' ? {
+        weapon: typeof entry.weapon === 'string' ? entry.weapon : undefined,
+        passive: typeof entry.passive === 'string' ? entry.passive : undefined,
+      } : {});
+    };
+    return { ...profile, startingLoadouts: { warrior: choice('warrior'), assassin: choice('assassin') } };
   } catch (error) {
     throw new Error(`Impossible de charger le profil permanent : ${error instanceof Error ? error.message : 'format invalide'}`);
   }
